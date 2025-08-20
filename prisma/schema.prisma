@@ -1,0 +1,287 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"] // Nécessaire pour PostGIS si vous faites de la géolocalisation avancée
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis] // Activer PostGIS pour les fonctions de géolocalisation
+}
+
+// ----------------------------------------
+// ---       MODÈLES DE BASE            ---
+// ----------------------------------------
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String
+  firstName         String    @map("first_name")
+  lastName          String?   @map("last_name")
+  phoneNumber       String?   @map("phone_number")
+  profileImageUrl   String?   @map("profile_image_url")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Le profil principal de l'utilisateur (ce qu'il est par défaut)
+  // Un 'PARTICULIER' peut aussi devenir membre d'une entreprise.
+  profileType       ProfileType @default(PARTICULIER)
+
+  // Relations
+  memberships       BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
+  ordersAsCustomer  Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
+  ordersAsEmployee  Order[]          @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
+  reviews           Review[]
+}
+
+model Business {
+  id              String      @id @default(cuid())
+  name            String      // Nom du commerce, fournisseur ou restaurant
+  description     String?
+  type            BusinessType // COMMERCANT, FOURNISSEUR, RESTAURATEUR
+  logoUrl         String?     @map("logo_url")
+  coverImageUrl   String?     @map("cover_image_url")
+  address         String?
+  phoneNumber     String?     @map("phone_number")
+  location        Unsupported("geometry(Point, 4326)")? // Pour la géolocalisation (PostGIS)
+  isVerified      Boolean     @default(false) @map("is_verified")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  owner           User      @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
+  ownerId         String    @map("owner_id")
+  members         BusinessMember[]
+  products        Product[]
+  ordersReceived  Order[]   @relation("BusinessOrders") // Commandes reçues (ventes, réservations)
+  ordersPlaced    Order[]   @relation("BusinessPurchases") // Commandes passées (achats)
+  stockMovements  StockMovement[]
+}
+
+// Table de jointure pour lier les Utilisateurs aux Entreprises (Employés)
+model BusinessMember {
+  id          String   @id @default(cuid())
+  role        MemberRole // ADMIN ou MEMBER
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String   @map("user_id")
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId  String   @map("business_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, businessId]) // Un utilisateur ne peut avoir qu'un seul rôle par entreprise
+}
+
+// ----------------------------------------
+// ---      MODÈLES PRODUITS & STOCK      ---
+// ----------------------------------------
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  imageUrl    String?  @map("image_url")
+
+  // Relations
+  products    Product[]
+  attributes  CategoryAttribute[] // Attributs spécifiques à cette catégorie (ex: "Taille", "Couleur" pour Vêtements)
+}
+
+// Attributs dynamiques par catégorie
+model CategoryAttribute {
+  id         String     @id @default(cuid())
+  name       String     // ex: "Taille", "Couleur", "Ingrédients"
+  categoryId String     @map("category_id")
+  category   Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // Relations
+  variantValues VariantAttributeValue[]
+
+  @@unique([name, categoryId])
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  // Ce produit est-il destiné à la vente en gros (lot) ou au détail (unité) ?
+  salesUnit       SalesUnit @default(UNIT)
+  
+  // Relations
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId      String    @map("business_id")
+  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryId      String    @map("category_id")
+  variants        ProductVariant[]
+  reviews         Review[]
+}
+
+model ProductVariant {
+  id                String    @id @default(cuid())
+  sku               String?   @unique // Stock Keeping Unit
+  barcode           String?   @unique
+  price             Decimal   // Prix de vente (si vendu à l'unité)
+  purchasePrice     Decimal   @map("purchase_price") // Prix d'achat
+  quantityInStock   Int       @default(0) @map("quantity_in_stock")
+  alertThreshold    Int?      @map("alert_threshold") // Seuil d'alerte de stock
+
+  // Pour les Fournisseurs
+  itemsPerLot       Int?      @map("items_per_lot") // Nombre d'unités par lot
+  lotPrice          Decimal?  @map("lot_price")     // Prix du lot
+  
+  // Relations
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId         String    @map("product_id")
+  attributeValues   VariantAttributeValue[]
+  OrderLine         OrderLine[]
+  stockMovements    StockMovement[]
+}
+
+// Valeur d'un attribut pour une variante (ex: "Taille" = "M", "Couleur" = "Bleu")
+model VariantAttributeValue {
+  id          String   @id @default(cuid())
+  value       String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId   String   @map("variant_id")
+  attribute   CategoryAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeId String   @map("attribute_id")
+
+  @@unique([variantId, attributeId])
+}
+
+model StockMovement {
+  id              String      @id @default(cuid())
+  type            MovementType
+  quantityChange  Int         @map("quantity_change") // Négatif pour une sortie, positif pour une entrée
+  newQuantity     Int         @map("new_quantity") // Quantité résultante
+  reason          String?     // Ex: "Vente client", "Achat fournisseur", "Perte (expiré)"
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  variantId       String      @map("variant_id")
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId      String      @map("business_id")
+  order           Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?     @map("order_id")
+  performedBy     User        @relation(fields: [performedById], references: [id], onDelete: Restrict)
+  performedById   String      @map("performed_by_id")
+}
+
+// ----------------------------------------
+// ---     MODÈLES COMMANDES & AVIS     ---
+// ----------------------------------------
+
+model Order {
+  id                String      @id @default(cuid())
+  orderNumber       String      @unique @map("order_number")
+  type              OrderType
+  status            OrderStatus @default(PENDING)
+  totalAmount       Decimal     @map("total_amount")
+  notes             String?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  
+  // -- Relations --
+  // Pour une VENTE (SALE) ou RESERVATION (RESERVATION)
+  // - businessId: l'entreprise qui vend/reçoit la réservation
+  // - customerId: l'utilisateur Particulier qui achète/réserve
+  business          Business    @relation("BusinessOrders", fields: [businessId], references: [id], onDelete: Restrict)
+  businessId        String      @map("business_id")
+  customer          User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Restrict)
+  customerId        String      @map("customer_id")
+
+  // Pour un ACHAT (PURCHASE)
+  // - purchasingBusinessId: l'entreprise qui achète
+  // - supplierBusinessId: l'entreprise qui vend (le fournisseur)
+  // - employeeId: l'employé qui a passé la commande
+  purchasingBusiness  Business?   @relation("BusinessPurchases", fields: [purchasingBusinessId], references: [id], onDelete: Restrict)
+  purchasingBusinessId String?   @map("purchasing_business_id")
+  employee            User?       @relation("EmployeeActions", fields: [employeeId], references: [id], onDelete: Restrict)
+  employeeId          String?     @map("employee_id")
+
+  // -- Table de restaurant pour les réservations --
+  tableNumber       String?     @map("table_number")
+  reservationDate   DateTime?   @map("reservation_date")
+
+  lines             OrderLine[]
+  stockMovements    StockMovement[]
+}
+
+model OrderLine {
+  id        String  @id @default(cuid())
+  quantity  Int
+  price     Decimal // Prix unitaire au moment de la commande
+  
+  // Relations
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String  @map("order_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  variantId String  @map("variant_id")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1 to 5
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+}
+
+// ----------------------------------------
+// ---              ENUMS                 ---
+// ----------------------------------------
+
+enum ProfileType {
+  PARTICULIER
+  PRO // Un utilisateur PRO peut être Commerçant, Fournisseur ou Restaurateur via ses entreprises
+}
+
+enum BusinessType {
+  COMMERCANT
+  FOURNISSEUR
+  RESTAURATEUR
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum SalesUnit {
+  UNIT // Vendu à l'unité
+  LOT  // Vendu en lot
+}
+
+enum MovementType {
+  INITIAL_STOCK
+  PURCHASE_ENTRY
+  SALE
+  RETURN
+  LOSS
+  ADJUSTMENT
+}
+
+enum OrderType {
+  SALE
+  PURCHASE
+  RESERVATION
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
