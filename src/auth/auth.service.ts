@@ -103,43 +103,48 @@ export class AuthService {
       };
     }
 
-    const resetToken = crypto.randomUUID().toString();
-    const passwordResetToken = await bcrypt.hash(resetToken, 10);
-    const passwordResetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { passwordResetToken, passwordResetTokenExpiresAt },
-    });
-
-    await this.mailService.sendPasswordResetEmail(user, resetToken);
-
-    return {
-      message:
-        'Si un compte est associé à cet e-mail, un lien de réinitialisation a été envoyé.',
-    };
-  }
-
-  // --- NOUVELLE FONCTION RESET PASSWORD ---
-  async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    const { token, newPassword } = resetPasswordDto;
-    const hashedToken = await bcrypt.hash(token, 10);
-
-    // Il n'est pas possible de rechercher directement sur le token haché
-    // Nous devons donc trouver une autre approche ou stocker le token en clair (moins sécurisé)
-    // Pour cet exemple, nous allons considérer que le token n'est pas haché pour simplifier.
-    // EN PRODUCTION : stocker le token haché et trouver un moyen d'identifier l'utilisateur autrement.
-    const passwordResetToken = token;
-
-    const user = await this.prisma.user.findFirst({
-      where: {
-        passwordResetToken: passwordResetToken,
-        passwordResetTokenExpiresAt: { gt: new Date() },
+      data: {
+        otp: hashedOtp,
+        otpExpiresAt: otpExpiresAt,
       },
     });
 
-    if (!user) {
-      throw new BadRequestException('Token invalide ou expiré.');
+    // Envoyer le code OTP (non haché) par e-mail
+    await this.mailService.sendPasswordResetEmail(user, otp);
+
+    return {
+      message:
+        'Si un compte est associé à cet e-mail, un code de réinitialisation a été envoyé.',
+    };
+  }
+
+  // --- NOUVELLE VERSION DE resetPassword ---
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { email, otp, newPassword } = resetPasswordDto;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user || !user.otp || !user.otpExpiresAt) {
+      throw new BadRequestException('Demande de réinitialisation invalide.');
+    }
+
+    if (new Date() > user.otpExpiresAt) {
+      throw new BadRequestException(
+        'Le code OTP de réinitialisation a expiré.',
+      );
+    }
+
+    const isOtpMatching = await bcrypt.compare(otp, user.otp);
+    if (!isOtpMatching) {
+      throw new BadRequestException('Code OTP invalide.');
     }
 
     const newHashedPassword = await bcrypt.hash(newPassword, 10);
@@ -148,13 +153,14 @@ export class AuthService {
       where: { id: user.id },
       data: {
         password: newHashedPassword,
-        passwordResetToken: null,
-        passwordResetTokenExpiresAt: null,
+        otp: null, // Nettoyer l'OTP après utilisation
+        otpExpiresAt: null,
       },
     });
 
     return { message: 'Mot de passe réinitialisé avec succès.' };
   }
+
   async login(loginUserDto: LoginUserDto) {
     const { email, password } = loginUserDto;
 

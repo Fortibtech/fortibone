@@ -84,7 +84,9 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  @ApiOperation({ summary: 'Réinitialiser le mot de passe avec un token' })
+  @ApiOperation({
+    summary: 'Réinitialiser le mot de passe avec un e-mail et un OTP',
+  })
   @ApiResponse({
     status: 200,
     description: 'Mot de passe mis à jour avec succès.',
