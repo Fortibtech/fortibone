@@ -31,6 +31,14 @@ model User {
   // Un 'PARTICULIER' peut aussi devenir membre d'une entreprise.
   profileType ProfileType @default(PARTICULIER)
 
+   // --- CHAMPS AJOUTÉS POUR LA VÉRIFICATION ET LA RÉINITIALISATION ---
+  isEmailVerified           Boolean   @default(false) @map("is_email_verified")
+  otp                       String?   // One-Time Password pour la vérification email
+  otpExpiresAt              DateTime? @map("otp_expires_at")
+  passwordResetToken        String?   @map("password_reset_token")
+  passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
+  // -----------------------------------------------------------------
+
   // Relations
   memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
   ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client

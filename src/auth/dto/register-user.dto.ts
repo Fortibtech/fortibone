@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
@@ -11,7 +12,7 @@ import { ProfileType } from '@prisma/client';
 export class RegisterUserDto {
   @ApiProperty({
     example: 'john.doe@example.com',
-    description: 'Adresse email unique de l\'utilisateur',
+    description: "Adresse email unique de l'utilisateur",
   })
   @IsEmail()
   @IsNotEmpty()
@@ -19,15 +20,17 @@ export class RegisterUserDto {
 
   @ApiProperty({
     example: 'strongPassword123',
-    description: 'Mot de passe de l\'utilisateur (minimum 8 caractères)',
+    description: "Mot de passe de l'utilisateur (minimum 8 caractères)",
   })
   @IsString()
-  @MinLength(8, { message: 'Le mot de passe doit contenir au moins 8 caractères.' })
+  @MinLength(8, {
+    message: 'Le mot de passe doit contenir au moins 8 caractères.',
+  })
   password: string;
 
   @ApiProperty({
     example: 'John',
-    description: 'Prénom de l\'utilisateur',
+    description: "Prénom de l'utilisateur",
   })
   @IsString()
   @IsNotEmpty()
@@ -35,11 +38,20 @@ export class RegisterUserDto {
 
   @ApiProperty({
     example: 'Doe',
-    description: 'Nom de famille de l\'utilisateur',
+    description: "Nom de famille de l'utilisateur",
     required: false,
   })
   @IsString()
   lastName?: string;
+
+  @ApiProperty({
+    example: '+33612345678',
+    description: "Numéro de téléphone de l'utilisateur",
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  phoneNumber?: string;
 
   @ApiProperty({
     enum: ProfileType,
