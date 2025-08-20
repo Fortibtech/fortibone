@@ -16,7 +16,7 @@ async function bootstrap() {
 
   // Configuration de la documentation Swagger
   const config = new DocumentBuilder()
-    .setTitle('FortiBone API')
+    .setTitle('FortibOne API')
     .setDescription(
       'Documentation de l"API pour la plateforme commerciale FortiBone',
     )

@@ -1,98 +1,147 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+Absolument. Voici une proposition de `README.md` complète et professionnelle pour le projet backend de FortiBone. Ce fichier est crucial car il sert de porte d'entrée pour tout développeur (y compris votre futur vous) qui rejoindra le projet.
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Vous pouvez copier-coller ce contenu directement dans un fichier `README.md` à la racine de votre projet.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+# FortiBone - API Backend
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+![NestJS](https://img.shields.io/badge/NestJS-%23E0234E.svg?style=for-the-badge&logo=nestjs&logoColor=white)![Prisma](https://img.shields.io/badge/Prisma-%232D3748.svg?style=for-the-badge&logo=prisma&logoColor=white)![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)![TypeScript](https://img.shields.io/badge/TypeScript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 
-## Project setup
+Ce dépôt contient le code source du backend de **FortiBone**, une plateforme commerciale moderne conçue pour un écosystème à quatre profils distincts : Particulier, Commerçant, Fournisseur et Restaurateur. L'API est construite avec NestJS, en suivant une architecture modulaire, scalable et testable.
 
-```bash
-$ pnpm install
+## 📖 Table des Matières
+
+- [✨ Fonctionnalités Principales](#-fonctionnalités-principales)
+- [🛠️ Stack Technique](#️-stack-technique)
+- [🚀 Démarrage Rapide](#-démarrage-rapide)
+  - [Prérequis](#prérequis)
+  - [Installation](#installation)
+- [📚 Documentation de l'API](#-documentation-de-lapi)
+- [📂 Structure du Projet](#-structure-du-projet)
+- [📜 Scripts Disponibles](#-scripts-disponibles)
+- [📄 Licence](#-licence)
+
+## ✨ Fonctionnalités Principales
+
+-   🔐 **Authentification Robuste** : Inscription, connexion, vérification d'e-mail par OTP, et réinitialisation de mot de passe par OTP, le tout sécurisé par des tokens JWT.
+-   👥 **Gestion de Profils Utilisateurs** : Profils enrichis avec gestion des informations personnelles (date de naissance, localisation, sexe, etc.).
+-   🏢 **Gestion d'Entreprises** : Création et gestion d'entités professionnelles (Commerçant, Fournisseur, Restaurateur) avec attribution de rôles aux membres (Admin, Membre).
+-   📦 **Catalogue de Produits Dynamique** : Système de catégories avec attributs personnalisables (ex: taille, couleur pour les vêtements) et gestion de produits avec variantes.
+-   📈 **Gestion d'Inventaire Précise** : Suivi des stocks en temps réel (unités ou lots), avec un historique complet des mouvements pour une traçabilité parfaite.
+-   🛒 **Système de Commandes & Réservations** : Logique de commande B2C (Particulier -> Commerçant) et B2B (Commerçant -> Fournisseur), ainsi qu'un module de réservation pour les restaurateurs.
+-   ✉️ **Notifications par E-mail** : Envoi d'e-mails transactionnels pour les étapes clés (vérification de compte, réinitialisation de mot de passe).
+
+## 🛠️ Stack Technique
+
+| Catégorie       | Technologie                                                                  |
+| --------------- | ---------------------------------------------------------------------------- |
+| **Framework**   | [**NestJS**](https://nestjs.com/) (Node.js)                                  |
+| **Langage**     | [**TypeScript**](https://www.typescriptlang.org/)                            |
+| **Base de Données** | [**PostgreSQL**](https://www.postgresql.org/) avec l'extension **PostGIS** |
+| **ORM**         | [**Prisma**](https://www.prisma.io/)                                         |
+| **Authentification** | **JWT** avec [**Passport.js**](http://www.passportjs.org/)               |
+| **Validation**  | `class-validator` & `class-transformer`                                      |
+| **Documentation API** | **Swagger (OpenAPI)** via `@nestjs/swagger`                            |
+| **Envoi d'E-mails** | `@nestjs-modules/mailer` (Nodemailer)                                      |
+
+## 🚀 Démarrage Rapide
+
+Suivez ces instructions pour obtenir une copie du projet fonctionnelle sur votre machine locale à des fins de développement.
+
+### Prérequis
+
+Assurez-vous d'avoir les outils suivants installés sur votre système :
+
+-   [Node.js](https://nodejs.org/en/) (v18.x ou supérieure recommandée)
+-   [npm](https://www.npmjs.com/) ou [yarn](https://yarnpkg.com/)
+-   [PostgreSQL](https://www.postgresql.org/download/) (v14 ou supérieure)
+-   Un client de base de données comme [DBeaver](https://dbeaver.io/) ou [pgAdmin](https://www.pgadmin.org/)
+
+### Installation
+
+1.  **Clonez le dépôt :**
+    ```bash
+    git clone https://github.com/Fortibtech/fortibone.git
+    cd fortibone-backend
+    ```
+
+2.  **Installez les dépendances :**
+    ```bash
+    npm install
+    ```
+
+3.  **Configurez les variables d'environnement :**
+    Créez un fichier `.env` à la racine du projet en copiant le fichier d'exemple `.env.example` (s'il existe) ou en utilisant le modèle ci-dessous.
+
+    ```env
+    # Fichier .env
+
+    # Base de Données (PostgreSQL)
+    # Assurez-vous que la base de données 'fortibone' existe
+    DATABASE_URL="postgresql://VOTRE_USER:VOTRE_MOT_DE_PASSE@localhost:5432/fortibone?schema=public"
+
+    # Sécurité - JSON Web Token (JWT)
+    # Utilisez une chaîne de caractères longue et aléatoire pour le secret en production
+    JWT_SECRET=VOTRE_SECRET_TRES_COMPLIQUE_ET_LONG
+    JWT_EXPIRATION=1d
+
+    # Service d'envoi d'e-mails (SMTP)
+    # Utilisez un service comme Mailtrap, SendGrid, ou Ethereal pour les tests
+    SMTP_HOST=smtp.example.com
+    SMTP_PORT=587
+    SMTP_USER=user@example.com
+    SMTP_PASS=your-smtp-password
+    SMTP_FROM=noreply@fortibone.com
+    ```
+
+4.  **Appliquez les migrations de la base de données :**
+    Cette commande va lire votre `prisma/schema.prisma`, créer les tables et les colonnes nécessaires dans votre base de données.
+    ```bash
+    npx prisma migrate dev
+    ```
+    Elle générera également le client Prisma typé.
+
+5.  **Lancez l'application en mode développement :**
+    ```bash
+    npm run start:dev
+    ```
+    Le serveur démarrera sur `http://localhost:3000`. L'application se rechargera automatiquement à chaque modification de fichier.
+
+## 📚 Documentation de l'API
+
+Une fois l'application lancée, la documentation complète de l'API, générée avec **Swagger**, est disponible à l'adresse suivante. Vous pouvez l'utiliser pour explorer et tester tous les endpoints de manière interactive.
+
+➡️ **[http://localhost:3000/api-docs](http://localhost:3000/api-docs)**
+
+## 📂 Structure du Projet
+
+Le projet suit une architecture modulaire où chaque fonctionnalité principale est isolée dans son propre module pour une meilleure organisation et maintenabilité.
+
+```
+src/
+├── auth/           # Authentification (inscription, connexion, JWT, OTP)
+├── business/       # Gestion des entreprises et des membres
+├── inventory/      # Gestion des stocks et des mouvements
+├── mail/           # Service d'envoi d'e-mails
+├── orders/         # Gestion des commandes et réservations
+├── prisma/         # Schéma Prisma et service de connexion à la BDD
+├── products/       # Gestion des produits, catégories et variantes
+├── users/          # Gestion des profils utilisateurs
+├── app.module.ts   # Module racine de l'application
+└── main.ts         # Fichier d'entrée de l'application
 ```
 
-## Compile and run the project
+## 📜 Scripts Disponibles
 
-```bash
-# development
-$ pnpm run start
+Dans le `package.json`, vous trouverez plusieurs scripts utiles :
 
-# watch mode
-$ pnpm run start:dev
+-   `npm run start`: Démarre l'application en mode production.
+-   `npm run start:dev`: Démarre l'application en mode développement avec le rechargement à chaud.
+-   `npm run build`: Compile le code TypeScript en JavaScript.
+-   `npm run lint`: Analyse le code source pour trouver des erreurs de style.
+-   `npm test`: Lance les tests unitaires.
 
-# production mode
-$ pnpm run start:prod
-```
+## 📄 Licence
 
-## Run tests
-
-```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Distribué sous la licence ISC. Voir le fichier `LICENSE` pour plus d'informations.
