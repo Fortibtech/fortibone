@@ -1,9 +1,3 @@
-Absolument. Voici une proposition de `README.md` complète et professionnelle pour le projet backend de FortiBone. Ce fichier est crucial car il sert de porte d'entrée pour tout développeur (y compris votre futur vous) qui rejoindra le projet.
-
-Vous pouvez copier-coller ce contenu directement dans un fichier `README.md` à la racine de votre projet.
-
----
-
 # FortiBone - API Backend
 
 ![NestJS](https://img.shields.io/badge/NestJS-%23E0234E.svg?style=for-the-badge&logo=nestjs&logoColor=white)![Prisma](https://img.shields.io/badge/Prisma-%232D3748.svg?style=for-the-badge&logo=prisma&logoColor=white)![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)![TypeScript](https://img.shields.io/badge/TypeScript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
