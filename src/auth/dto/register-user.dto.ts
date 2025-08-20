@@ -6,8 +6,9 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  IsDateString,
 } from 'class-validator';
-import { ProfileType } from '@prisma/client';
+import { ProfileType, Gender } from '@prisma/client';
 
 export class RegisterUserDto {
   @ApiProperty({
@@ -52,6 +53,43 @@ export class RegisterUserDto {
   @IsString()
   @IsOptional()
   phoneNumber?: string;
+
+  @ApiProperty({
+    example: '1995-10-24',
+    description: "Date de naissance de l'utilisateur (format YYYY-MM-DD)",
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  dateOfBirth?: string;
+
+  @ApiProperty({
+    example: 'France',
+    description: "Pays de résidence de l'utilisateur",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiProperty({
+    example: 'Paris',
+    description: "Ville de résidence de l'utilisateur",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiProperty({
+    enum: Gender,
+    example: Gender.MALE,
+    description: "Sexe de l'utilisateur",
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
 
   @ApiProperty({
     enum: ProfileType,

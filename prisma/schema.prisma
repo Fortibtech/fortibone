@@ -39,6 +39,13 @@ model User {
   passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
   // -----------------------------------------------------------------
 
+   // --- NOUVEAUX CHAMPS DE PROFIL ---
+  dateOfBirth     DateTime? @map("date_of_birth")
+  country         String?
+  city            String?
+  gender          Gender?
+  // ---------------------------------
+
   // Relations
   memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
   ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
@@ -294,4 +301,13 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
   REFUNDED
+}
+
+
+// --- NOUVELLE ENUM POUR LE SEXE ---
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
 }

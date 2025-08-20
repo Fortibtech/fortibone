@@ -44,6 +44,7 @@ export class AuthService {
         email,
         password: hashedPassword,
         ...rest,
+        dateOfBirth: rest.dateOfBirth ? new Date(rest.dateOfBirth) : undefined,
         otp: otpHash,
         otpExpiresAt,
       },
