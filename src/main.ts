@@ -28,7 +28,7 @@ async function bootstrap() {
 
   // Assurer un arrêt propre de l'application (utile pour Prisma)
   app.enableShutdownHooks();
-  
+
   await app.listen(process.env.PORT ?? 3000);
 }
 
