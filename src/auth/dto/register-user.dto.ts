@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsEnum,
@@ -98,4 +98,11 @@ export class RegisterUserDto {
   })
   @IsEnum(ProfileType)
   profileType: ProfileType;
+
+   @ApiPropertyOptional({
+    description: "Token d'invitation reçu par e-mail (optionnel)",
+  })
+  @IsOptional()
+  @IsString()
+  invitationToken?: string;
 }

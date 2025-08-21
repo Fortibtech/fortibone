@@ -9,11 +9,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import * as bcrypt from 'bcrypt';
 import { LoginUserDto } from './dto/login-user.dto';
-import { User } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { MailService } from 'src/mail/mail.service';
+import { ResendOtpDto, ResendOtpType } from './dto/resend-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -25,7 +26,7 @@ export class AuthService {
 
   // --- NOUVELLE FONCTION REGISTER ---
   async register(registerUserDto: RegisterUserDto) {
-    const { email, password, ...rest } = registerUserDto;
+    const { email, password, invitationToken, ...rest } = registerUserDto;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -34,29 +35,84 @@ export class AuthService {
       throw new ConflictException('Un utilisateur avec cet email existe déjà.');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
-    const otpHash = await bcrypt.hash(otp, 10);
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
+    // Utiliser une transaction Prisma pour assurer l'atomicité
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Créer l'utilisateur (logique existante)
+      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
+      const otpHash = await bcrypt.hash(otp, 10);
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          ...rest,
+          dateOfBirth: rest.dateOfBirth
+            ? new Date(rest.dateOfBirth)
+            : undefined,
+          otp: otpHash,
+          otpExpiresAt,
+          isEmailVerified: !!invitationToken,
+        },
+      });
 
-    const user = await this.prisma.user.create({
+      // 2. Si un token d'invitation est fourni, le traiter
+      if (invitationToken) {
+        await this.processInvitation(tx, invitationToken, user);
+      } else {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
+        // Envoyer l'e-mail de vérification
+        await this.mailService.sendVerificationEmail(user, otp);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _, ...result } = user;
+
+      return {
+        message:
+          'Inscription réussie. Veuillez vérifier votre e-mail pour activer votre compte.',
+        result,
+      };
+    });
+  }
+
+  private async processInvitation(
+    tx: Prisma.TransactionClient,
+    token: string,
+    user: User,
+  ) {
+    const invitation = await tx.invitation.findUnique({
+      where: { token, status: 'PENDING' },
+    });
+
+    if (!invitation) {
+      throw new BadRequestException("Lien d'invitation invalide ou expiré.");
+    }
+
+    if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
+      throw new BadRequestException(
+        "Vous devez vous inscrire avec l'email sur lequel vous avez reçu l'invitation.",
+      );
+    }
+
+    if (new Date() > invitation.expiresAt) {
+      throw new BadRequestException('Cette invitation a expiré.');
+    }
+
+    // Créer le lien de membre
+    await tx.businessMember.create({
       data: {
-        email,
-        password: hashedPassword,
-        ...rest,
-        dateOfBirth: rest.dateOfBirth ? new Date(rest.dateOfBirth) : undefined,
-        otp: otpHash,
-        otpExpiresAt,
+        userId: user.id,
+        businessId: invitation.businessId,
+        role: invitation.role,
       },
     });
 
-    // Envoyer l'e-mail de vérification
-    await this.mailService.sendVerificationEmail(user, otp);
-
-    return {
-      message:
-        'Inscription réussie. Veuillez vérifier votre e-mail pour activer votre compte.',
-    };
+    // Mettre à jour le statut de l'invitation
+    await tx.invitation.update({
+      where: { id: invitation.id },
+      data: { status: 'ACCEPTED' },
+    });
   }
 
   // --- NOUVELLE FONCTION VERIFY EMAIL ---
@@ -160,6 +216,68 @@ export class AuthService {
     });
 
     return { message: 'Mot de passe réinitialisé avec succès.' };
+  }
+
+  // --- NOUVELLE FONCTION POUR LE RENVOI D'OTP ---
+  async resendOtp(resendOtpDto: ResendOtpDto) {
+    const { email, type } = resendOtpDto;
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Réponse générique pour la sécurité
+      return {
+        message:
+          'Si un compte est associé à cet e-mail, un nouveau code a été envoyé.',
+      };
+    }
+
+    // --- Logique de Cooldown (ex: 2 minutes) ---
+    const cooldownMinutes = 2;
+    if (
+      user.lastOtpSentAt &&
+      new Date(Date.now() - cooldownMinutes * 60 * 1000) < user.lastOtpSentAt
+    ) {
+      throw new UnauthorizedException(
+        `Veuillez attendre ${cooldownMinutes} minutes avant de demander un nouveau code.`,
+      );
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
+
+    // Logique conditionnelle basée sur le type de demande
+    if (type === ResendOtpType.EMAIL_VERIFICATION) {
+      if (user.isEmailVerified) {
+        throw new BadRequestException('Cet e-mail est déjà vérifié.');
+      }
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          otp: hashedOtp,
+          otpExpiresAt,
+          lastOtpSentAt: new Date(),
+        },
+      });
+      await this.mailService.sendVerificationEmail(user, otp);
+    } else if (type === ResendOtpType.PASSWORD_RESET) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          otp: hashedOtp,
+          otpExpiresAt: otpExpiresAt,
+          lastOtpSentAt: new Date(),
+        },
+      });
+      await this.mailService.sendPasswordResetEmail(user, otp);
+    } else {
+      throw new BadRequestException('Type de demande invalide.');
+    }
+
+    return {
+      message:
+        'Si un compte est associé à cet e-mail, un nouveau code a été envoyé.',
+    };
   }
 
   async login(loginUserDto: LoginUserDto) {

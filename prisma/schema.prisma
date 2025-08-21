@@ -35,6 +35,7 @@ model User {
   isEmailVerified           Boolean   @default(false) @map("is_email_verified")
   otp                       String?   // One-Time Password pour la vérification email
   otpExpiresAt              DateTime? @map("otp_expires_at")
+  lastOtpSentAt             DateTime? @map("last_otp_sent_at")
   passwordResetToken        String?   @map("password_reset_token")
   passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
   // -----------------------------------------------------------------
@@ -48,12 +49,26 @@ model User {
 
   // Relations
   memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
+  invitations      Invitation[] // Les entreprises dont cet utilisateur est membre/employé
   ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
   ordersAsEmployee Order[]          @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
   reviews          Review[]
-  businesses         Business[]
-  stockMovements    StockMovement[]
+  businessReviews   BusinessReview[]
+  businesses       Business[]
+  stockMovements   StockMovement[]
 }
+
+// NOUVEAU MODÈLE POUR LES DEVISES
+model Currency {
+  id           String  @id @default(cuid())
+  code         String  @unique // Code ISO 4217, ex: "EUR", "USD"
+  name         String  // ex: "Euro", "US Dollar"
+  symbol       String  // ex: "€", "$"
+  exchangeRate Float   @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
+
+  businesses Business[]
+}
+
 
 model Business {
   id            String                                @id @default(cuid())
@@ -69,6 +84,20 @@ model Business {
   createdAt     DateTime                              @default(now()) @map("created_at")
   updatedAt     DateTime                              @updatedAt @map("updated_at")
 
+   // --- CHAMP AJOUTÉ POUR LA DEVISE ---
+  currency   Currency? @relation(fields: [currencyId], references: [id])
+  currencyId String?   @map("currency_id")
+
+
+  // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
+  averageRating Float     @default(0) @map("average_rating")
+  reviewCount   Int       @default(0) @map("review_count")
+
+  // --- RELATIONS AJOUTÉES ---
+  openingHours  OpeningHour[]
+  reviews       BusinessReview[]
+  invitations   Invitation[]
+
   // Relations
   owner          User             @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
   ownerId        String           @map("owner_id")
@@ -78,6 +107,46 @@ model Business {
   ordersPlaced   Order[]          @relation("BusinessPurchases") // Commandes passées (achats)
   stockMovements StockMovement[]
 }
+
+// --- NOUVEAU MODÈLE POUR LES HORAIRES D'OUVERTURE ---
+model OpeningHour {
+  id         String    @id @default(cuid())
+  dayOfWeek  DayOfWeek @map("day_of_week")
+  openTime   String    @map("open_time") // Format "HH:mm"
+  closeTime  String    @map("close_time") // Format "HH:mm"
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+
+  @@unique([businessId, dayOfWeek, openTime, closeTime]) // Empêche les doublons exacts
+}
+
+// --- NOUVEAU MODÈLE POUR LES AVIS ---
+model BusinessReview {
+  id        String   @id @default(cuid())
+  rating    Int // 1 à 5
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String   @map("author_id")
+
+  @@unique([businessId, authorId]) // Un utilisateur ne peut laisser qu'un seul avis par entreprise
+}
+
+// --- NOUVELLES ÉNUMÉRATIONS ---
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
 
 // Table de jointure pour lier les Utilisateurs aux Entreprises (Employés)
 model BusinessMember {
@@ -310,4 +379,28 @@ enum Gender {
   FEMALE
   OTHER
   PREFER_NOT_TO_SAY
+}
+
+// --- NOUVEAU MODÈLE POUR LES INVITATIONS ---
+model Invitation {
+  id         String           @id @default(cuid())
+  email      String // L'email de la personne invitée
+  token      String           @unique // Token unique et sécurisé pour accepter l'invitation
+  role       MemberRole
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime         @map("expires_at")
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  invitedBy  User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedById String   @map("invited_by_id")
+
+  @@unique([email, businessId]) // Une personne ne peut être invitée qu'une seule fois par entreprise
+}
+
+// --- NOUVELLE ÉNUMÉRATION POUR LE STATUT DE L'INVITATION ---
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
 }

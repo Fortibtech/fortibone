@@ -5,6 +5,10 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MailModule } from './mail/mail.module';
+import { UsersModule } from './users/users.module';
+import { UploaderModule } from './uploader/uploader.module';
+import { BusinessModule } from './business/business.module';
+import { CurrenciesModule } from './currencies/currencies.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -13,6 +17,10 @@ import { MailModule } from './mail/mail.module';
     PrismaModule,
     AuthModule,
     MailModule,
+    UsersModule,
+    UploaderModule,
+    BusinessModule,
+    CurrenciesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
