@@ -14,6 +14,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { MailService } from 'src/mail/mail.service';
+import { ResendOtpDto, ResendOtpType } from './dto/resend-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -160,6 +161,68 @@ export class AuthService {
     });
 
     return { message: 'Mot de passe réinitialisé avec succès.' };
+  }
+
+  // --- NOUVELLE FONCTION POUR LE RENVOI D'OTP ---
+  async resendOtp(resendOtpDto: ResendOtpDto) {
+    const { email, type } = resendOtpDto;
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Réponse générique pour la sécurité
+      return {
+        message:
+          'Si un compte est associé à cet e-mail, un nouveau code a été envoyé.',
+      };
+    }
+
+    // --- Logique de Cooldown (ex: 2 minutes) ---
+    const cooldownMinutes = 2;
+    if (
+      user.lastOtpSentAt &&
+      new Date(Date.now() - cooldownMinutes * 60 * 1000) < user.lastOtpSentAt
+    ) {
+      throw new UnauthorizedException(
+        `Veuillez attendre ${cooldownMinutes} minutes avant de demander un nouveau code.`,
+      );
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
+
+    // Logique conditionnelle basée sur le type de demande
+    if (type === ResendOtpType.EMAIL_VERIFICATION) {
+      if (user.isEmailVerified) {
+        throw new BadRequestException('Cet e-mail est déjà vérifié.');
+      }
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          otp: hashedOtp,
+          otpExpiresAt,
+          lastOtpSentAt: new Date(),
+        },
+      });
+      await this.mailService.sendVerificationEmail(user, otp);
+    } else if (type === ResendOtpType.PASSWORD_RESET) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          otp: hashedOtp,
+          otpExpiresAt: otpExpiresAt,
+          lastOtpSentAt: new Date(),
+        },
+      });
+      await this.mailService.sendPasswordResetEmail(user, otp);
+    } else {
+      throw new BadRequestException('Type de demande invalide.');
+    }
+
+    return {
+      message:
+        'Si un compte est associé à cet e-mail, un nouveau code a été envoyé.',
+    };
   }
 
   async login(loginUserDto: LoginUserDto) {

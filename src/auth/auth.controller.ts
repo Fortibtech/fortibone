@@ -20,6 +20,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -94,5 +95,19 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Token invalide ou expiré.' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('resend-otp')
+  @ApiOperation({ summary: 'Renvoyer un code de vérification (OTP)' })
+  @ApiResponse({
+    status: 200,
+    description: 'La demande de renvoi a été traitée.',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Trop de demandes. Veuillez attendre avant de réessayer.',
+  })
+  async resendOtp(@Body() resendOtpDto: ResendOtpDto) {
+    return this.authService.resendOtp(resendOtpDto);
   }
 }

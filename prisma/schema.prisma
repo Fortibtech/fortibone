@@ -35,6 +35,7 @@ model User {
   isEmailVerified           Boolean   @default(false) @map("is_email_verified")
   otp                       String?   // One-Time Password pour la vérification email
   otpExpiresAt              DateTime? @map("otp_expires_at")
+  lastOtpSentAt             DateTime? @map("last_otp_sent_at")
   passwordResetToken        String?   @map("password_reset_token")
   passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
   // -----------------------------------------------------------------
