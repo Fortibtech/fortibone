@@ -13,6 +13,7 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
+  Put,
 } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
@@ -31,6 +32,11 @@ import { BusinessType, ProfileType } from '@prisma/client';
 import { QueryBusinessDto } from './dto/query-business.dto';
 import { UploaderService } from 'src/uploader/uploader.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
+import { BusinessAdminGuard } from './guard/business-admin.guard';
+import { CreateReviewDto } from './dto/create-review.dto';
+import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
 
 @ApiTags('Businesses')
 @Controller('businesses')
@@ -159,5 +165,79 @@ export class BusinessController {
     return this.businessService.updateBusinessImage(id, req.user.id, {
       coverImageUrl: url,
     });
+  }
+
+  // --- ENDPOINTS POUR LA GESTION DES MEMBRES ---
+
+  @Post(':id/members')
+  @UseGuards(JwtAuthGuard, BusinessAdminGuard)
+  @ApiOperation({
+    summary: 'Ajouter un membre à une entreprise (Admin/Owner requis)',
+  })
+  addMember(@Param('id') id: string, @Body() addMemberDto: AddMemberDto) {
+    return this.businessService.addMember(id, addMemberDto);
+  }
+
+  @Get(':id/members')
+  @UseGuards(JwtAuthGuard) // Potentiellement, tout membre peut voir l'équipe
+  @ApiOperation({ summary: "Lister les membres d'une entreprise" })
+  findAllMembers(@Param('id') id: string) {
+    return this.businessService.findAllMembers(id);
+  }
+
+  @Patch(':id/members/:memberId')
+  @UseGuards(JwtAuthGuard, BusinessAdminGuard)
+  @ApiOperation({
+    summary: "Mettre à jour le rôle d'un membre (Admin/Owner requis)",
+  })
+  updateMemberRole(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body() updateMemberDto: UpdateMemberDto,
+  ) {
+    return this.businessService.updateMemberRole(id, memberId, updateMemberDto);
+  }
+
+  @Delete(':id/members/:memberId')
+  @UseGuards(JwtAuthGuard, BusinessAdminGuard)
+  @ApiOperation({
+    summary: "Retirer un membre d'une entreprise (Admin/Owner requis)",
+  })
+  removeMember(@Param('id') id: string, @Param('memberId') memberId: string) {
+    return this.businessService.removeMember(id, memberId);
+  }
+
+  // --- HORAIRES D'OUVERTURE ---
+  @Put(':id/opening-hours')
+  @UseGuards(JwtAuthGuard, BusinessAdminGuard)
+  @ApiOperation({
+    summary: "Définir les horaires d'ouverture (Admin/Owner requis)",
+  })
+  setOpeningHours(@Param('id') id: string, @Body() dto: SetOpeningHoursDto) {
+    return this.businessService.setOpeningHours(id, dto);
+  }
+
+  // --- AVIS ET NOTATION ---
+  @Post(':id/reviews')
+  @UseGuards(JwtAuthGuard) // Tout utilisateur connecté peut laisser un avis
+  @ApiOperation({ summary: 'Laisser un avis sur une entreprise' })
+  createReview(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() dto: CreateReviewDto,
+  ) {
+    return this.businessService.createReview(id, req.user.id, dto);
+  }
+
+  @Get(':id/reviews')
+  @ApiOperation({ summary: "Lister les avis d'une entreprise avec pagination" })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  findAllReviews(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.businessService.findAllReviews(id, { page, limit });
   }
 }

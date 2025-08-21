@@ -90,4 +90,13 @@ export class CreateBusinessDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @ApiPropertyOptional({
+    example: 'clw9a1b2c0000d4t6efgh1234',
+    description:
+      "L'ID de la devise à associer à l'entreprise. Par défaut : EUR.",
+  })
+  @IsOptional()
+  @IsString() // On pourrait créer un custom validator pour vérifier que l'ID existe
+  currencyId?: string;
 }
