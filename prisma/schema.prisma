@@ -196,6 +196,8 @@ model Product {
   // Ce produit est-il destiné à la vente en gros (lot) ou au détail (unité) ?
   salesUnit   SalesUnit @default(UNIT)
 
+  imageUrl    String?   @map("image_url") // Image principale/par défaut du produit
+
   // Relations
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   businessId String           @map("business_id")
@@ -203,6 +205,7 @@ model Product {
   categoryId String           @map("category_id")
   variants   ProductVariant[]
   reviews    Review[]
+
 }
 
 model ProductVariant {
@@ -217,6 +220,9 @@ model ProductVariant {
   // Pour les Fournisseurs
   itemsPerLot Int?     @map("items_per_lot") // Nombre d'unités par lot
   lotPrice    Decimal? @map("lot_price") // Prix du lot
+
+  imageUrl        String? @map("image_url") // AJOUTER : Image spécifique à la variante
+
 
   // Relations
   product         Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)

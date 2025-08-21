@@ -9,6 +9,8 @@ import { UsersModule } from './users/users.module';
 import { UploaderModule } from './uploader/uploader.module';
 import { BusinessModule } from './business/business.module';
 import { CurrenciesModule } from './currencies/currencies.module';
+import { CategoriesModule } from './categories/categories.module';
+import { ProductsModule } from './products/products.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -21,6 +23,8 @@ import { CurrenciesModule } from './currencies/currencies.module';
     UploaderModule,
     BusinessModule,
     CurrenciesModule,
+    CategoriesModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

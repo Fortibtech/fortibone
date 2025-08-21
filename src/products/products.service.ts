@@ -1,0 +1,298 @@
+// src/products/products.service.ts
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { CreateVariantDto } from './dto/create-variant.dto';
+import { Prisma } from '@prisma/client';
+import { QueryProductsDto, ProductSortBy } from './dto/query-products.dto';
+import { CurrenciesService } from 'src/currencies/currencies.service';
+
+@Injectable()
+export class ProductsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currenciesService: CurrenciesService, // INJECTER
+  ) {}
+
+  // --- Gestion des Produits Templates ---
+  async createProduct(
+    businessId: string,
+    userId: string,
+    dto: CreateProductDto,
+  ) {
+    await this.verifyUserIsBusinessOwner(businessId, userId);
+    return this.prisma.product.create({
+      data: { ...dto, businessId },
+    });
+  }
+
+  // --- Gestion des Variantes ---
+  async createVariant(
+    productId: string,
+    userId: string,
+    dto: CreateVariantDto,
+  ) {
+    const product = await this.findProductById(productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+
+    // Valider que les attributs fournis correspondent à la catégorie du produit
+    await this.validateAttributes(product.categoryId, dto.attributes);
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Créer la variante de base
+      const variant = await tx.productVariant.create({
+        data: {
+          productId,
+          price: dto.price,
+          purchasePrice: dto.purchasePrice,
+          quantityInStock: dto.quantityInStock,
+          sku: dto.sku,
+          barcode: dto.barcode,
+          itemsPerLot: dto.itemsPerLot,
+          lotPrice: dto.lotPrice,
+        },
+      });
+
+      // 2. Créer les liens vers les valeurs d'attributs
+      await tx.variantAttributeValue.createMany({
+        data: dto.attributes.map((attr) => ({
+          variantId: variant.id,
+          attributeId: attr.attributeId,
+          value: attr.value,
+        })),
+      });
+
+      // 3. (Optionnel mais recommandé) Créer le premier mouvement de stock
+      if (dto.quantityInStock > 0) {
+        await tx.stockMovement.create({
+          data: {
+            variantId: variant.id,
+            businessId: product.businessId,
+            performedById: userId,
+            type: 'INITIAL_STOCK',
+            quantityChange: dto.quantityInStock,
+            newQuantity: dto.quantityInStock,
+            reason: 'Création de la variante',
+          },
+        });
+      }
+
+      return this.findVariantById(variant.id, tx); // Retourner la variante complète
+    });
+  }
+
+  // --- Fonctions de Consultation ---
+  async findProductById(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        category: { include: { attributes: true } },
+        variants: {
+          include: { attributeValues: { include: { attribute: true } } },
+        },
+      },
+    });
+    if (!product) throw new NotFoundException('Produit non trouvé.');
+    return product;
+  }
+
+  async findVariantById(id: string, tx?: Prisma.TransactionClient) {
+    const db = tx || this.prisma;
+    return db.productVariant.findUnique({
+      where: { id },
+      include: { attributeValues: { include: { attribute: true } } },
+    });
+  }
+
+  // --- Fonctions d'Aide et de Validation ---
+  private async verifyUserIsBusinessOwner(businessId: string, userId: string) {
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+    });
+    if (!business) throw new NotFoundException('Entreprise non trouvée.');
+    if (business.ownerId !== userId) {
+      throw new ForbiddenException('Action non autorisée.');
+    }
+  }
+
+  private async validateAttributes(
+    categoryId: string,
+    attributes: { attributeId: string; value: string }[],
+  ) {
+    const categoryAttributes = await this.prisma.categoryAttribute.findMany({
+      where: { categoryId },
+    });
+    const categoryAttributeIds = new Set(categoryAttributes.map((a) => a.id));
+
+    if (attributes.length !== categoryAttributeIds.size) {
+      throw new BadRequestException(
+        "Le nombre d'attributs fournis ne correspond pas à celui de la catégorie.",
+      );
+    }
+
+    for (const attr of attributes) {
+      if (!categoryAttributeIds.has(attr.attributeId)) {
+        throw new BadRequestException(
+          `L'attribut avec l'ID ${attr.attributeId} n'appartient pas à la catégorie de ce produit.`,
+        );
+      }
+    }
+  }
+
+  async search(dto: QueryProductsDto) {
+    const {
+      page = 1,
+      limit = 20,
+      currencyCode = 'EUR',
+      latitude,
+      longitude,
+      sortBy = ProductSortBy.RELEVANCE,
+      ...filters
+    } = dto;
+    const offset = (page - 1) * limit;
+
+    // 1. Obtenir le taux de change pour la devise du client
+    const targetCurrency =
+      await this.currenciesService.findByCode(currencyCode);
+    if (!targetCurrency) {
+      throw new BadRequestException(
+        `La devise ${currencyCode} n'est pas supportée.`,
+      );
+    }
+    const exchangeRate = targetCurrency.exchangeRate;
+
+    // 2. Construction dynamique de la requête SQL
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    let query = `
+      SELECT
+        pv.id, pv.price, pv.sku, pv."imageUrl", p.name, p."imageUrl" as "productImageUrl", b.name as "businessName",
+        -- Calcul du prix converti
+        (pv.price / c."exchange_rate" * ${exchangeRate}) as "convertedPrice"
+        ${
+          latitude !== undefined && longitude !== undefined
+            ? `,
+        -- Calcul de la distance si les coordonnées sont fournies
+        (ST_Distance(
+          b.location,
+          ST_MakePoint(${longitude}, ${latitude})::geography
+        ) / 1000) as "distanceKm"
+        `
+            : ''
+        }
+      FROM "ProductVariant" pv
+      JOIN "Product" p ON pv."productId" = p.id
+      JOIN "Business" b ON p."businessId" = b.id
+      JOIN "Currency" c ON b."currencyId" = c.id
+      WHERE pv."quantityInStock" > 0
+    `;
+
+    // Filtres dynamiques
+    if (filters.search) {
+      query += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex} OR pv.sku ILIKE $${paramIndex})`;
+      params.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+    if (filters.categoryId) {
+      query += ` AND p."categoryId" = $${paramIndex}`;
+      params.push(filters.categoryId);
+      paramIndex++;
+    }
+    // ... Ajoutez d'autres filtres (businessType, etc.) de la même manière
+
+    // Construction d'une sous-requête pour filtrer sur les champs calculés
+    let finalQuery = `SELECT * FROM (${query}) AS results WHERE 1=1`;
+
+    if (filters.minPrice !== undefined) {
+      finalQuery += ` AND "convertedPrice" >= $${paramIndex}`;
+      params.push(filters.minPrice);
+      paramIndex++;
+    }
+    if (filters.maxPrice !== undefined) {
+      finalQuery += ` AND "convertedPrice" <= $${paramIndex}`;
+      params.push(filters.maxPrice);
+      paramIndex++;
+    }
+    if (
+      latitude !== undefined &&
+      longitude !== undefined &&
+      filters.radius !== undefined
+    ) {
+      finalQuery += ` AND "distanceKm" <= $${paramIndex}`;
+      params.push(filters.radius);
+      paramIndex++;
+    }
+
+    // Requête pour compter le total des résultats (pour la pagination)
+    const countQuery = `SELECT COUNT(*) FROM (${finalQuery}) as count_results`;
+    const totalResult: any[] = await this.prisma.$queryRawUnsafe(
+      countQuery,
+      ...params,
+    );
+    const total = Number(totalResult[0].count);
+
+    // Tri
+    switch (sortBy) {
+      case ProductSortBy.PRICE_ASC:
+        finalQuery += ' ORDER BY "convertedPrice" ASC';
+        break;
+      case ProductSortBy.PRICE_DESC:
+        finalQuery += ' ORDER BY "convertedPrice" DESC';
+        break;
+      case ProductSortBy.DISTANCE:
+        if (latitude !== undefined && longitude !== undefined) {
+          finalQuery += ' ORDER BY "distanceKm" ASC';
+        }
+        break;
+      // Par défaut (RELEVANCE), pas de tri spécifique, la BDD choisit
+    }
+
+    // Pagination
+    finalQuery += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(limit, offset);
+
+    const results = await this.prisma.$queryRawUnsafe(finalQuery, ...params);
+
+    return {
+      data: results,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async updateProductImage(
+    productId: string,
+    userId: string,
+    imageUrl: string,
+  ) {
+    const product = await this.findProductById(productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: { imageUrl },
+    });
+  }
+
+  async updateVariantImage(
+    variantId: string,
+    userId: string,
+    imageUrl: string,
+  ) {
+    const variant = await this.findVariantById(variantId);
+    if (!variant) throw new NotFoundException('Variante non trouvée.');
+    const product = await this.findProductById(variant.productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+    return this.prisma.productVariant.update({
+      where: { id: variantId },
+      data: { imageUrl },
+    });
+  }
+}
