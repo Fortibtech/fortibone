@@ -1,14 +1,17 @@
 // src/users/users.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, User } from '@prisma/client';
+import { MemberRole, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
+// Définir un type pour la réponse enrichie
+type BusinessWithRole = Prisma.BusinessGetPayload<{
+  include: { owner: { select: { id: true; firstName: true } } };
+}> & { userRole: 'OWNER' | MemberRole };
+
 @Injectable()
 export class UsersService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // Fonction pour retirer les champs sensibles d'un objet utilisateur
   private secureUser(user: User) {
@@ -62,5 +65,49 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  // --- NOUVELLE FONCTION POUR TROUVER LES ENTREPRISES D'UN UTILISATEUR ---
+  async findUserBusinesses(userId: string): Promise<BusinessWithRole[]> {
+    const businesses = await this.prisma.business.findMany({
+      where: {
+        // La condition OR est parfaite pour ce cas :
+        // Soit l'utilisateur est le propriétaire,
+        // Soit il fait partie des membres de l'entreprise.
+        OR: [{ ownerId: userId }, { members: { some: { userId: userId } } }],
+      },
+      include: {
+        // Nous incluons les membres pour déterminer le rôle
+        members: {
+          where: { userId: userId }, // On ne récupère que l'entrée du membre concerné
+          select: { role: true },
+        },
+        // On inclut aussi le propriétaire pour l'afficher dans les détails
+        owner: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    // Enrichir la réponse avec le rôle de l'utilisateur pour chaque entreprise
+    const businessesWithRoles = businesses.map((business) => {
+      let role: 'OWNER' | MemberRole;
+
+      if (business.ownerId === userId) {
+        // Le rôle de propriétaire prime sur tout le reste
+        role = 'OWNER';
+      } else {
+        // Si l'utilisateur n'est pas propriétaire, il est forcément membre
+        role = business.members[0].role;
+      }
+
+      // Supprimer le champ 'members' qui a servi à notre calcul
+      // pour ne pas alourdir la réponse inutilement.
+      const { members, ...rest } = business;
+
+      return { ...rest, userRole: role };
+    });
+
+    return businessesWithRoles;
   }
 }

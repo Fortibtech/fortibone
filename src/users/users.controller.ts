@@ -116,4 +116,19 @@ export class UsersController {
 
     return updatedUser;
   }
+
+  // --- NOUVEL ENDPOINT POUR LES ENTREPRISES DE L'UTILISATEUR ---
+  @Get('me/businesses')
+  @ApiOperation({
+    summary:
+      "Lister les entreprises possédées par ou dont est membre l'utilisateur connecté",
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      "Retourne une liste d'entreprises avec le rôle de l'utilisateur dans chacune.",
+  })
+  async findMyBusinesses(@Request() req) {
+    return this.usersService.findUserBusinesses(req.user.id);
+  }
 }
