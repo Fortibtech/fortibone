@@ -11,6 +11,8 @@ import {
   Request,
   ForbiddenException,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { BusinessService } from './business.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
@@ -18,6 +20,8 @@ import { UpdateBusinessDto } from './dto/update-business.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -25,13 +29,18 @@ import {
 } from '@nestjs/swagger';
 import { BusinessType, ProfileType } from '@prisma/client';
 import { QueryBusinessDto } from './dto/query-business.dto';
+import { UploaderService } from 'src/uploader/uploader.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Businesses')
 @Controller('businesses')
 @UseGuards(JwtAuthGuard) // Protège toutes les routes du contrôleur
 @ApiBearerAuth()
 export class BusinessController {
-  constructor(private readonly businessService: BusinessService) {}
+  constructor(
+    private readonly businessService: BusinessService,
+    private readonly uploaderService: UploaderService, // << INJECTER
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -101,5 +110,54 @@ export class BusinessController {
   @ApiResponse({ status: 403, description: 'Action non autorisée.' })
   remove(@Request() req, @Param('id') id: string) {
     return this.businessService.remove(id, req.user.id);
+  }
+  
+  // --- NOUVEL ENDPOINT POUR LE LOGO ---
+  @Post(':id/logo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: "Téléverser ou mettre à jour le logo d'une entreprise",
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  async uploadLogo(
+    @Request() req,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const { url } = await this.uploaderService.upload(file);
+    return this.businessService.updateBusinessImage(id, req.user.id, {
+      logoUrl: url,
+    });
+  }
+
+  // --- NOUVEL ENDPOINT POUR L'IMAGE DE COUVERTURE ---
+  @Post(':id/cover')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary:
+      "Téléverser ou mettre à jour l'image de couverture d'une entreprise",
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  async uploadCoverImage(
+    @Request() req,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const { url } = await this.uploaderService.upload(file);
+    return this.businessService.updateBusinessImage(id, req.user.id, {
+      coverImageUrl: url,
+    });
   }
 }

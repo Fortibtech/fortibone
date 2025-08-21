@@ -130,14 +130,8 @@ export class BusinessService {
     updateBusinessDto: UpdateBusinessDto,
     userId: string,
   ) {
-    const business = await this.findOne(id);
-
     // Vérification d'autorisation : seul le propriétaire peut modifier
-    if (business.ownerId !== userId) {
-      throw new ForbiddenException(
-        "Vous n'êtes pas autorisé à modifier cette entreprise.",
-      );
-    }
+    await this.checkOwnership(id, userId); // Réutiliser la vérification
 
     return this.prisma.business.update({
       where: { id },
@@ -146,18 +140,50 @@ export class BusinessService {
   }
 
   async remove(id: string, userId: string) {
-    const business = await this.findOne(id);
-
-    // Vérification d'autorisation : seul le propriétaire peut supprimer
-    if (business.ownerId !== userId) {
-      throw new ForbiddenException(
-        "Vous n'êtes pas autorisé à supprimer cette entreprise.",
-      );
-    }
+    await this.checkOwnership(id, userId); // Réutiliser la vérification
 
     await this.prisma.business.delete({ where: { id } });
     return {
       message: `L'entreprise avec l'ID ${id} a été supprimée avec succès.`,
     };
+  }
+
+  // NOUVELLE MÉTHODE POUR VÉRIFIER LA PROPRIÉTÉ
+  async checkOwnership(businessId: string, userId: string) {
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { ownerId: true }, // On ne récupère que ce dont on a besoin
+    });
+
+    if (!business) {
+      throw new NotFoundException(
+        `L'entreprise avec l'ID ${businessId} n'a pas été trouvée.`,
+      );
+    }
+
+    if (business.ownerId !== userId) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à effectuer cette action sur cette entreprise.",
+      );
+    }
+  }
+  async updateBusinessImage(
+    businessId: string,
+    userId: string,
+    imageUrls: { logoUrl?: string; coverImageUrl?: string },
+  ) {
+    const business = await this.findOne(businessId);
+
+    // Vérification d'autorisation cruciale
+    if (business.ownerId !== userId) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à modifier cette entreprise.",
+      );
+    }
+
+    return this.prisma.business.update({
+      where: { id: businessId },
+      data: imageUrls,
+    });
   }
 }
