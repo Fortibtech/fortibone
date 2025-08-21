@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { MemberRole, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { QueryProductListDto } from 'src/products/dto/query-business-products.dto';
 
 // Définir un type pour la réponse enrichie
 type BusinessWithRole = Prisma.BusinessGetPayload<{
@@ -109,5 +110,54 @@ export class UsersService {
     });
 
     return businessesWithRoles;
+  }
+
+  async findUserFavorites(userId: string, queryDto: QueryProductListDto) {
+    const { page = 1, limit = 10, search, categoryId } = queryDto;
+    const skip = (page - 1) * limit;
+
+    // Construction de la clause WHERE pour le produit imbriqué
+    const where: Prisma.FavoriteProductWhereInput = {
+      userId,
+    };
+
+    if (search || categoryId) {
+      where.product = {};
+      if (search) {
+        where.product.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+      if (categoryId) {
+        where.product.categoryId = categoryId;
+      }
+    }
+
+    const [favorites, total] = await this.prisma.$transaction([
+      this.prisma.favoriteProduct.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { assignedAt: 'desc' },
+        include: {
+          product: {
+            include: {
+              business: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.favoriteProduct.count({ where }),
+    ]);
+
+    const products = favorites.map((fav) => fav.product);
+    return {
+      data: products,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

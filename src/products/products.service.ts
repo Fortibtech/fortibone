@@ -1,6 +1,7 @@
 // src/products/products.service.ts
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +12,10 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { Prisma } from '@prisma/client';
 import { QueryProductsDto, ProductSortBy } from './dto/query-products.dto';
 import { CurrenciesService } from 'src/currencies/currencies.service';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateVariantDto } from './dto/update-variant.dto';
+import { CreateReviewDto } from './dto/create-review.dto';
+import { QueryProductListDto } from './dto/query-business-products.dto';
 
 @Injectable()
 export class ProductsService {
@@ -294,5 +299,237 @@ export class ProductsService {
       where: { id: variantId },
       data: { imageUrl },
     });
+  }
+
+  // --- NOUVELLES MÉTHODES DE GESTION (UPDATE & DELETE) ---
+
+  async updateProduct(
+    productId: string,
+    userId: string,
+    dto: UpdateProductDto,
+  ) {
+    const product = await this.findProductById(productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: dto,
+    });
+  }
+
+  async removeProduct(productId: string, userId: string) {
+    const product = await this.findProductById(productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+
+    // La suppression est en cascade (configurée dans Prisma),
+    // donc supprimer le produit supprimera aussi ses variantes et leurs relations.
+    await this.prisma.product.delete({
+      where: { id: productId },
+    });
+
+    return {
+      message: `Le produit "${product.name}" et toutes ses variantes ont été supprimés.`,
+    };
+  }
+
+  async updateVariant(
+    variantId: string,
+    userId: string,
+    dto: UpdateVariantDto,
+  ) {
+    const variant = await this.findVariantById(variantId);
+    if (!variant) throw new NotFoundException('Variante non trouvée.');
+
+    const product = await this.findProductById(variant.productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+
+    // Note : Nous ne permettons pas de changer les attributs, car cela change l'identité de la variante.
+    // L'utilisateur devrait supprimer et recréer si les attributs sont mauvais.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { attributes, ...updateData } = dto;
+
+    return this.prisma.productVariant.update({
+      where: { id: variantId },
+      data: updateData,
+    });
+  }
+
+  async removeVariant(variantId: string, userId: string) {
+    const variant = await this.findVariantById(variantId);
+    if (!variant) throw new NotFoundException('Variante non trouvée.');
+
+    const product = await this.findProductById(variant.productId);
+    await this.verifyUserIsBusinessOwner(product.businessId, userId);
+
+    await this.prisma.productVariant.delete({
+      where: { id: variantId },
+    });
+
+    return { message: 'La variante a été supprimée avec succès.' };
+  }
+
+  // --- NOUVELLE MÉTHODE DE LISTAGE PAR ENTREPRISE ---
+
+  async findAllByBusiness(businessId: string, queryDto: QueryProductListDto) {
+    const { page = 1, limit = 10, search, categoryId } = queryDto;
+    const skip = (page - 1) * limit;
+
+    // Construction dynamique de la clause WHERE
+    const where: Prisma.ProductWhereInput = {
+      businessId,
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        // On peut même rechercher dans les SKU des variantes
+        {
+          variants: {
+            some: { sku: { contains: search, mode: 'insensitive' } },
+          },
+        },
+      ];
+    }
+
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    const [products, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where, // Appliquer le filtre
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+        include: {
+          variants: {
+            include: {
+              attributeValues: { include: { attribute: true } },
+            },
+          },
+          category: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.product.count({ where }), // Compter avec le même filtre
+    ]);
+
+    return {
+      data: products,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // --- GESTION DES AVIS ---
+
+  // Méthode privée pour centraliser la logique de mise à jour des agrégats
+  private async _updateProductReviewAggregates(
+    productId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const aggregates = await tx.review.aggregate({
+      where: { productId },
+      _avg: { rating: true },
+      _count: { id: true },
+    });
+    const avgRating = aggregates._avg.rating || 0;
+    const reviewCount = aggregates._count.id || 0;
+
+    return tx.product.update({
+      where: { id: productId },
+      data: {
+        averageRating: parseFloat(avgRating.toFixed(2)),
+        reviewCount: reviewCount,
+      },
+    });
+  }
+
+  async createReview(
+    productId: string,
+    authorId: string,
+    dto: CreateReviewDto,
+  ) {
+    // La contrainte @@unique dans Prisma gère déjà la prévention des doublons,
+    // mais une vérification préalable peut donner un meilleur message d'erreur.
+    const existingReview = await this.prisma.review.findFirst({
+      where: { AND: [{ productId }, { authorId }] },
+    });
+    if (existingReview) {
+      throw new ConflictException(
+        'Vous avez déjà laissé un avis pour ce produit.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.review.create({
+        data: { ...dto, productId, authorId },
+      });
+      return this._updateProductReviewAggregates(productId, tx);
+    });
+  }
+
+  async findAllReviews(productId: string, { page = 1, limit = 10 }) {
+    const skip = (page - 1) * limit;
+    const [reviews, total] = await this.prisma.$transaction([
+      this.prisma.review.findMany({
+        where: { productId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profileImageUrl: true,
+            },
+          },
+        },
+      }),
+      this.prisma.review.count({ where: { productId } }),
+    ]);
+
+    return {
+      data: reviews,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // --- GESTION DES FAVORIS ---
+
+  async addFavorite(productId: string, userId: string) {
+    // Utiliser upsert pour une opération idempotente : si le favori existe, ne rien faire.
+    // Si non, le créer.
+    await this.prisma.favoriteProduct.upsert({
+      where: { userId_productId: { userId, productId } },
+      update: {},
+      create: { userId, productId },
+    });
+    return { message: 'Produit ajouté aux favoris.' };
+  }
+
+  async removeFavorite(productId: string, userId: string) {
+    try {
+      await this.prisma.favoriteProduct.delete({
+        where: { userId_productId: { userId, productId } },
+      });
+      return { message: 'Produit retiré des favoris.' };
+    } catch (error) {
+      // Ignorer l'erreur si le favori n'existait pas, car le résultat est le même.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        return { message: 'Produit retiré des favoris.' };
+      }
+      throw error;
+    }
   }
 }

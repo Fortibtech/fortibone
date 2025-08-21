@@ -99,7 +99,7 @@ export class RegisterUserDto {
   @IsEnum(ProfileType)
   profileType: ProfileType;
 
-   @ApiPropertyOptional({
+  @ApiPropertyOptional({
     description: "Token d'invitation reçu par e-mail (optionnel)",
   })
   @IsOptional()

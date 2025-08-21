@@ -8,10 +8,10 @@ import {
   Delete,
   Request,
   UseGuards,
-  ParseUUIDPipe,
   Post,
   UploadedFile,
   UseInterceptors,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -20,12 +20,14 @@ import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UploaderService } from 'src/uploader/uploader.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { QueryProductListDto } from 'src/products/dto/query-business-products.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -130,5 +132,19 @@ export class UsersController {
   })
   async findMyBusinesses(@Request() req) {
     return this.usersService.findUserBusinesses(req.user.id);
+  }
+
+  @Get('me/favorites')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary:
+      "Lister les produits favoris de l'utilisateur (avec filtres et pagination)",
+  })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  findMyFavorites(@Request() req, @Query() queryDto: QueryProductListDto) {
+    return this.usersService.findUserFavorites(req.user.id, queryDto);
   }
 }

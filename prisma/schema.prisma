@@ -56,7 +56,9 @@ model User {
   businessReviews   BusinessReview[]
   businesses       Business[]
   stockMovements   StockMovement[]
+  favoriteProducts FavoriteProduct[]
 }
+
 
 // NOUVEAU MODÈLE POUR LES DEVISES
 model Currency {
@@ -198,6 +200,10 @@ model Product {
 
   imageUrl    String?   @map("image_url") // Image principale/par défaut du produit
 
+   // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
+  averageRating Float     @default(0) @map("average_rating")
+  reviewCount   Int       @default(0) @map("review_count")
+
   // Relations
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   businessId String           @map("business_id")
@@ -206,6 +212,7 @@ model Product {
   variants   ProductVariant[]
   reviews    Review[]
 
+  favoritedBy  FavoriteProduct[]
 }
 
 model ProductVariant {
@@ -242,6 +249,17 @@ model VariantAttributeValue {
   attributeId String            @map("attribute_id")
 
   @@unique([variantId, attributeId])
+}
+
+// --- NOUVEAU MODÈLE POUR LES FAVORIS (WISHLIST) ---
+model FavoriteProduct {
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String   @map("user_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String   @map("product_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  @@id([userId, productId]) // Clé primaire composite
 }
 
 model StockMovement {

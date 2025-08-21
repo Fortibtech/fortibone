@@ -10,6 +10,8 @@ import {
   UploadedFile,
   UseInterceptors,
   Query,
+  Delete,
+  Patch,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -27,6 +29,10 @@ import { UploaderService } from 'src/uploader/uploader.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BusinessType } from '@prisma/client';
 import { ProductSortBy, QueryProductsDto } from './dto/query-products.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateVariantDto } from './dto/update-variant.dto';
+import { CreateReviewDto } from './dto/create-review.dto';
+import { QueryProductListDto } from './dto/query-business-products.dto';
 
 @ApiTags('Products')
 @Controller()
@@ -147,11 +153,11 @@ export class ProductsController {
     );
   }
 
-  @Post('products/:productId/variants')
+  @Post('products/:id/variants')
   @ApiOperation({ summary: 'Ajouter une variante à un produit (Owner requis)' })
   createVariant(
     @Request() req,
-    @Param('productId') productId: string,
+    @Param('id') productId: string,
     @Body() createVariantDto: CreateVariantDto,
   ) {
     return this.productsService.createVariant(
@@ -160,6 +166,28 @@ export class ProductsController {
       createVariantDto,
     );
   }
+  @Patch('variants/:id')
+  @ApiOperation({
+    summary: 'Mettre à jour une variante de produit (Owner requis)',
+  })
+  updateVariant(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() updateVariantDto: UpdateVariantDto,
+  ) {
+    return this.productsService.updateVariant(
+      id,
+      req.user.id,
+      updateVariantDto,
+    );
+  }
+
+  @Delete('variants/:id')
+  @ApiOperation({ summary: 'Supprimer une variante de produit (Owner requis)' })
+  removeVariant(@Request() req, @Param('id') id: string) {
+    return this.productsService.removeVariant(id, req.user.id);
+  }
+
   // --- ENDPOINTS D'UPLOAD D'IMAGES ---
   @Post('products/:id/image')
   @UseInterceptors(FileInterceptor('file'))
@@ -197,5 +225,86 @@ export class ProductsController {
   })
   findProductById(@Param('id') id: string) {
     return this.productsService.findProductById(id);
+  }
+
+  // --- NOUVELLES ROUTES DE GESTION ---
+
+  @Patch('products/:id')
+  @ApiOperation({ summary: 'Mettre à jour un produit template (Owner requis)' })
+  updateProduct(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() updateProductDto: UpdateProductDto,
+  ) {
+    return this.productsService.updateProduct(
+      id,
+      req.user.id,
+      updateProductDto,
+    );
+  }
+
+  @Delete('products/:id')
+  @ApiOperation({
+    summary: 'Supprimer un produit et toutes ses variantes (Owner requis)',
+  })
+  removeProduct(@Request() req, @Param('id') id: string) {
+    return this.productsService.removeProduct(id, req.user.id);
+  }
+
+  // --- AVIS ---
+  @Post('products/:id/reviews')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Laisser un avis sur un produit' })
+  createReview(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() dto: CreateReviewDto,
+  ) {
+    return this.productsService.createReview(id, req.user.id, dto);
+  }
+
+  @Get('products/:id/reviews')
+  @ApiOperation({ summary: "Lister les avis d'un produit (paginé)" })
+  findAllReviews(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productsService.findAllReviews(id, { page, limit });
+  }
+
+  // --- FAVORIS ---
+  @Post('products/:id/favorite')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Ajouter un produit à sa liste de favoris' })
+  @ApiResponse({ status: 201, description: 'Produit ajouté avec succès.' })
+  addFavorite(@Request() req, @Param('id') id: string) {
+    return this.productsService.addFavorite(id, req.user.id);
+  }
+
+  @Delete('products/:id/favorite')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Retirer un produit de sa liste de favoris' })
+  @ApiResponse({ status: 200, description: 'Produit retiré avec succès.' })
+  removeFavorite(@Request() req, @Param('id') id: string) {
+    return this.productsService.removeFavorite(id, req.user.id);
+  }
+
+  // --- NOUVELLE ROUTE DE LISTAGE PAR ENTREPRISE ---
+  @Get('businesses/:businessId/products')
+  @ApiOperation({
+    summary:
+      "Lister les produits d'une entreprise (avec filtres et pagination)",
+  })
+  // Documentation Swagger pour les nouveaux filtres
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  findAllByBusiness(
+    @Param('businessId') businessId: string,
+    @Query() queryDto: QueryProductListDto,
+  ) {
+    return this.productsService.findAllByBusiness(businessId, queryDto);
   }
 }

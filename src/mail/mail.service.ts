@@ -37,7 +37,7 @@ export class MailService {
     });
   }
 
-    async sendInvitationEmail(
+  async sendInvitationEmail(
     inviteeEmail: string,
     invitationToken: string,
     businessName: string,
