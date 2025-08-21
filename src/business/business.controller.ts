@@ -117,7 +117,7 @@ export class BusinessController {
   remove(@Request() req, @Param('id') id: string) {
     return this.businessService.remove(id, req.user.id);
   }
-  
+
   // --- NOUVEL ENDPOINT POUR LE LOGO ---
   @Post(':id/logo')
   @UseInterceptors(FileInterceptor('file'))
@@ -172,10 +172,14 @@ export class BusinessController {
   @Post(':id/members')
   @UseGuards(JwtAuthGuard, BusinessAdminGuard)
   @ApiOperation({
-    summary: 'Ajouter un membre à une entreprise (Admin/Owner requis)',
+    summary: 'Inviter ou ajouter un membre (Admin/Owner requis)',
   })
-  addMember(@Param('id') id: string, @Body() addMemberDto: AddMemberDto) {
-    return this.businessService.addMember(id, addMemberDto);
+  addMember(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.businessService.inviteMember(id, req.user, dto);
   }
 
   @Get(':id/members')

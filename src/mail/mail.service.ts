@@ -36,4 +36,27 @@ export class MailService {
       `,
     });
   }
+
+    async sendInvitationEmail(
+    inviteeEmail: string,
+    invitationToken: string,
+    businessName: string,
+    inviterName: string,
+  ) {
+    // Le lien doit pointer vers la page d'inscription de votre frontend,
+    // en passant le token comme paramètre de requête.
+    const registrationLink = `https://votre-frontend.com/register?invitationToken=${invitationToken}`;
+
+    await this.mailerService.sendMail({
+      to: inviteeEmail,
+      subject: `Vous avez été invité à rejoindre ${businessName} sur FortiBone`,
+      html: `
+        <h1>Bonjour,</h1>
+        <p>${inviterName} vous a invité à rejoindre l'entreprise <strong>${businessName}</strong> sur FortiBone avec le rôle de membre.</p>
+        <p>Pour accepter, veuillez créer un compte en utilisant ce lien :</p>
+        <a href="${registrationLink}" style="...">Créer mon compte et rejoindre l'équipe</a>
+        <p>Ce lien d'invitation expirera dans 7 jours.</p>
+      `,
+    });
+  }
 }

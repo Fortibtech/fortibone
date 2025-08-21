@@ -10,18 +10,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { QueryBusinessDto } from './dto/query-business.dto';
-import { Prisma } from '@prisma/client';
+import { Business, MemberRole, Prisma, User } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { CurrenciesService } from 'src/currencies/currencies.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class BusinessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly currenciesService: CurrenciesService, // INJECTER
+    private readonly mailService: MailService, // INJECTER
   ) {}
 
   async create(createBusinessDto: CreateBusinessDto, ownerId: string) {
@@ -219,6 +221,25 @@ export class BusinessService {
 
   // --- GESTION DES MEMBRES ---
 
+  // L'ancienne méthode 'addMember' devient 'inviteMember'
+  async inviteMember(businessId: string, inviter: User, dto: AddMemberDto) {
+    const { email, role } = dto;
+    const business = await this.findOne(businessId);
+
+    // 1. Vérifier si un utilisateur avec cet email existe déjà
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      // L'utilisateur existe, on l'ajoute directement comme membre
+      return this.addMember(business.id, { email: existingUser.email, role });
+    } else {
+      // L'utilisateur n'existe pas, on crée une invitation formelle
+      return this.createNewInvitation(business, inviter, email, role);
+    }
+  }
+
   async addMember(businessId: string, addMemberDto: AddMemberDto) {
     const { email, role } = addMemberDto;
 
@@ -256,6 +277,36 @@ export class BusinessService {
         role,
       },
     });
+  }
+
+  private async createNewInvitation(
+    business: Business,
+    inviter: User,
+    email: string,
+    role: MemberRole,
+  ) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Expiration dans 7 jours
+    const token = crypto.randomUUID().toString();
+
+    const invitation = await this.prisma.invitation.create({
+      data: {
+        email,
+        token,
+        role,
+        expiresAt,
+        businessId: business.id,
+        invitedById: inviter.id,
+      },
+    });
+
+    await this.mailService.sendInvitationEmail(
+      email,
+      token,
+      business.name,
+      `${inviter.firstName} ${inviter.lastName || ''}`,
+    );
+
+    return { message: `Une invitation a été envoyée à ${email}.` };
   }
 
   async findAllMembers(businessId: string) {

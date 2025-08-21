@@ -28,7 +28,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document); // L'UI sera disponible sur /api-docs
 
-   // Servir les fichiers statiques depuis le dossier 'uploads'
+  // Servir les fichiers statiques depuis le dossier 'uploads'
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });

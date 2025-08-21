@@ -49,6 +49,7 @@ model User {
 
   // Relations
   memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
+  invitations      Invitation[] // Les entreprises dont cet utilisateur est membre/employé
   ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
   ordersAsEmployee Order[]          @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
   reviews          Review[]
@@ -95,6 +96,7 @@ model Business {
   // --- RELATIONS AJOUTÉES ---
   openingHours  OpeningHour[]
   reviews       BusinessReview[]
+  invitations   Invitation[]
 
   // Relations
   owner          User             @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
@@ -377,4 +379,28 @@ enum Gender {
   FEMALE
   OTHER
   PREFER_NOT_TO_SAY
+}
+
+// --- NOUVEAU MODÈLE POUR LES INVITATIONS ---
+model Invitation {
+  id         String           @id @default(cuid())
+  email      String // L'email de la personne invitée
+  token      String           @unique // Token unique et sécurisé pour accepter l'invitation
+  role       MemberRole
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime         @map("expires_at")
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  invitedBy  User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedById String   @map("invited_by_id")
+
+  @@unique([email, businessId]) // Une personne ne peut être invitée qu'une seule fois par entreprise
+}
+
+// --- NOUVELLE ÉNUMÉRATION POUR LE STATUT DE L'INVITATION ---
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
 }

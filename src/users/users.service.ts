@@ -103,7 +103,7 @@ export class UsersService {
 
       // Supprimer le champ 'members' qui a servi à notre calcul
       // pour ne pas alourdir la réponse inutilement.
-      const { members, ...rest } = business;
+      const { members: _, ...rest } = business;
 
       return { ...rest, userRole: role };
     });

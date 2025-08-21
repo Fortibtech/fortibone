@@ -12,7 +12,7 @@ import {
 export class UpdateUserDto {
   @ApiPropertyOptional({
     example: 'John',
-    description: 'Prénom de l\'utilisateur',
+    description: "Prénom de l'utilisateur",
   })
   @IsOptional()
   @IsString()
@@ -21,7 +21,7 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional({
     example: 'Doe',
-    description: 'Nom de famille de l\'utilisateur',
+    description: "Nom de famille de l'utilisateur",
   })
   @IsOptional()
   @IsString()
@@ -30,7 +30,7 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional({
     example: '+33712345678',
-    description: 'Numéro de téléphone de l\'utilisateur',
+    description: "Numéro de téléphone de l'utilisateur",
   })
   @IsOptional()
   @IsString()
@@ -38,7 +38,7 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional({
     example: 'https://example.com/path/to/profile.jpg',
-    description: 'URL de l\'image de profil',
+    description: "URL de l'image de profil",
   })
   @IsOptional()
   @IsString()
