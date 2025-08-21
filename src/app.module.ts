@@ -8,6 +8,7 @@ import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 import { UploaderModule } from './uploader/uploader.module';
 import { BusinessModule } from './business/business.module';
+import { CurrenciesModule } from './currencies/currencies.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -19,6 +20,7 @@ import { BusinessModule } from './business/business.module';
     UsersModule,
     UploaderModule,
     BusinessModule,
+    CurrenciesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

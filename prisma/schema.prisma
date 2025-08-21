@@ -52,9 +52,22 @@ model User {
   ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
   ordersAsEmployee Order[]          @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
   reviews          Review[]
-  businesses         Business[]
-  stockMovements    StockMovement[]
+  businessReviews   BusinessReview[]
+  businesses       Business[]
+  stockMovements   StockMovement[]
 }
+
+// NOUVEAU MODÈLE POUR LES DEVISES
+model Currency {
+  id           String  @id @default(cuid())
+  code         String  @unique // Code ISO 4217, ex: "EUR", "USD"
+  name         String  // ex: "Euro", "US Dollar"
+  symbol       String  // ex: "€", "$"
+  exchangeRate Float   @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
+
+  businesses Business[]
+}
+
 
 model Business {
   id            String                                @id @default(cuid())
@@ -70,6 +83,19 @@ model Business {
   createdAt     DateTime                              @default(now()) @map("created_at")
   updatedAt     DateTime                              @updatedAt @map("updated_at")
 
+   // --- CHAMP AJOUTÉ POUR LA DEVISE ---
+  currency   Currency? @relation(fields: [currencyId], references: [id])
+  currencyId String?   @map("currency_id")
+
+
+  // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
+  averageRating Float     @default(0) @map("average_rating")
+  reviewCount   Int       @default(0) @map("review_count")
+
+  // --- RELATIONS AJOUTÉES ---
+  openingHours  OpeningHour[]
+  reviews       BusinessReview[]
+
   // Relations
   owner          User             @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
   ownerId        String           @map("owner_id")
@@ -79,6 +105,46 @@ model Business {
   ordersPlaced   Order[]          @relation("BusinessPurchases") // Commandes passées (achats)
   stockMovements StockMovement[]
 }
+
+// --- NOUVEAU MODÈLE POUR LES HORAIRES D'OUVERTURE ---
+model OpeningHour {
+  id         String    @id @default(cuid())
+  dayOfWeek  DayOfWeek @map("day_of_week")
+  openTime   String    @map("open_time") // Format "HH:mm"
+  closeTime  String    @map("close_time") // Format "HH:mm"
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+
+  @@unique([businessId, dayOfWeek, openTime, closeTime]) // Empêche les doublons exacts
+}
+
+// --- NOUVEAU MODÈLE POUR LES AVIS ---
+model BusinessReview {
+  id        String   @id @default(cuid())
+  rating    Int // 1 à 5
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String   @map("author_id")
+
+  @@unique([businessId, authorId]) // Un utilisateur ne peut laisser qu'un seul avis par entreprise
+}
+
+// --- NOUVELLES ÉNUMÉRATIONS ---
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
 
 // Table de jointure pour lier les Utilisateurs aux Entreprises (Employés)
 model BusinessMember {
