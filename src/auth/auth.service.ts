@@ -42,31 +42,33 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Effectuer uniquement les opérations DB dans la transaction
-    const { user, invitationProcessed } = await this.prisma.$transaction(async (tx) => {
-      // 1. Créer l'utilisateur
-      const user = await tx.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          ...rest,
-          dateOfBirth: rest.dateOfBirth
-            ? new Date(rest.dateOfBirth)
-            : undefined,
-          otp: otpHash,
-          otpExpiresAt,
-          isEmailVerified: !!invitationToken,
-        },
-      });
+    const { user, invitationProcessed } = await this.prisma.$transaction(
+      async (tx) => {
+        // 1. Créer l'utilisateur
+        const user = await tx.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            ...rest,
+            dateOfBirth: rest.dateOfBirth
+              ? new Date(rest.dateOfBirth)
+              : undefined,
+            otp: otpHash,
+            otpExpiresAt,
+            isEmailVerified: !!invitationToken,
+          },
+        });
 
-      let invitationProcessed = false;
-      // 2. Si un token d'invitation est fourni, le traiter
-      if (invitationToken) {
-        await this.processInvitation(tx, invitationToken, user);
-        invitationProcessed = true;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      return { user, invitationProcessed };
-    });
+        let invitationProcessed = false;
+        // 2. Si un token d'invitation est fourni, le traiter
+        if (invitationToken) {
+          await this.processInvitation(tx, invitationToken, user);
+          invitationProcessed = true;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        return { user, invitationProcessed };
+      },
+    );
 
     // Envoyer l'e-mail de vérification en dehors de la transaction
     if (!invitationToken) {
