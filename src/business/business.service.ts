@@ -42,6 +42,16 @@ export class BusinessService {
       finalCurrencyId = defaultCurrency.id;
     }
 
+    // Vérifier que la devise existe avant de créer l'entreprise
+    const currency = await this.prisma.currency.findUnique({
+      where: { id: finalCurrencyId },
+    });
+    if (!currency) {
+      throw new BadRequestException(
+        `La devise spécifiée (${finalCurrencyId}) n'existe pas.`,
+      );
+    }
+
     const businessData = {
       ...rest,
       owner: { connect: { id: ownerId } },

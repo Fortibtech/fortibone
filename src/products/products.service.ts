@@ -505,8 +505,15 @@ export class ProductsService {
   // --- GESTION DES FAVORIS ---
 
   async addFavorite(productId: string, userId: string) {
-    // Utiliser upsert pour une opération idempotente : si le favori existe, ne rien faire.
-    // Si non, le créer.
+    // Vérifier que le produit existe avant d'ajouter aux favoris
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException('Produit non trouvé.');
+    }
+
     await this.prisma.favoriteProduct.upsert({
       where: { userId_productId: { userId, productId } },
       update: {},

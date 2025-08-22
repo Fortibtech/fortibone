@@ -35,14 +35,16 @@ export class AuthService {
       throw new ConflictException('Un utilisateur avec cet email existe déjà.');
     }
 
-    // Utiliser une transaction Prisma pour assurer l'atomicité
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Créer l'utilisateur (logique existante)
-      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
-      const otpHash = await bcrypt.hash(otp, 10);
-      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await this.prisma.user.create({
+    // Générer OTP et hash en dehors de la transaction
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expiration dans 10 minutes
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Effectuer uniquement les opérations DB dans la transaction
+    const { user, invitationProcessed } = await this.prisma.$transaction(async (tx) => {
+      // 1. Créer l'utilisateur
+      const user = await tx.user.create({
         data: {
           email,
           password: hashedPassword,
@@ -56,24 +58,29 @@ export class AuthService {
         },
       });
 
+      let invitationProcessed = false;
       // 2. Si un token d'invitation est fourni, le traiter
       if (invitationToken) {
         await this.processInvitation(tx, invitationToken, user);
-      } else {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // OTP à 6 chiffres
-        // Envoyer l'e-mail de vérification
-        await this.mailService.sendVerificationEmail(user, otp);
+        invitationProcessed = true;
       }
-
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _, ...result } = user;
-
-      return {
-        message:
-          'Inscription réussie. Veuillez vérifier votre e-mail pour activer votre compte.',
-        result,
-      };
+      return { user, invitationProcessed };
     });
+
+    // Envoyer l'e-mail de vérification en dehors de la transaction
+    if (!invitationToken) {
+      await this.mailService.sendVerificationEmail(user, otp);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _, ...result } = user;
+
+    return {
+      message:
+        'Inscription réussie. Veuillez vérifier votre e-mail pour activer votre compte.',
+      result,
+    };
   }
 
   private async processInvitation(
