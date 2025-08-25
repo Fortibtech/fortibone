@@ -14,7 +14,7 @@ import { Business, MemberRole, Prisma, User } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { CurrenciesService } from 'src/currencies/currencies.service';
-import { CreateReviewDto } from './dto/create-review.dto';
+import { CreateBusinessReviewDto } from './dto/create-business-review.dto';
 import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
 import { MailService } from 'src/mail/mail.service';
 
@@ -383,7 +383,7 @@ export class BusinessService {
   async createReview(
     businessId: string,
     authorId: string,
-    dto: CreateReviewDto,
+    dto: CreateBusinessReviewDto,
   ) {
     // Vérifier qu'un avis n'existe pas déjà pour cet utilisateur et cette entreprise
     const existingReview = await this.prisma.businessReview.findUnique({

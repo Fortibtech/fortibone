@@ -11,6 +11,8 @@ import { BusinessModule } from './business/business.module';
 import { CurrenciesModule } from './currencies/currencies.module';
 import { CategoriesModule } from './categories/categories.module';
 import { ProductsModule } from './products/products.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { OrdersModule } from './orders/orders.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,6 +27,8 @@ import { ProductsModule } from './products/products.module';
     CurrenciesModule,
     CategoriesModule,
     ProductsModule,
+    InventoryModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
