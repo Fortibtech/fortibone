@@ -49,7 +49,7 @@ export class OrdersService {
           );
         }
 
-        const price = variant.price; // Utiliser le prix actuel de la variante
+        const price = variant.price.toNumber(); // Utiliser le prix actuel de la variante
         totalAmount += price * line.quantity;
         orderLinesData.push({
           variantId: line.variantId,
