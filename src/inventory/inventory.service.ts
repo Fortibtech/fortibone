@@ -76,7 +76,7 @@ export class InventoryService {
   }
 
   // Méthode privée pour gérer la sortie de stock (FEFO)
-  private async decrementStockFromBatches(
+  async decrementStockFromBatches(
     tx: Prisma.TransactionClient,
     params: {
       variantId: string;
@@ -167,7 +167,7 @@ export class InventoryService {
   }
 
   // Méthode privée pour gérer l'entrée de stock (correction, retour)
-  private async incrementStockAsNewBatch(
+  async incrementStockAsNewBatch(
     tx: Prisma.TransactionClient,
     params: {
       variantId: string;
