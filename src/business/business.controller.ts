@@ -35,7 +35,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { BusinessAdminGuard } from './guard/business-admin.guard';
-import { CreateReviewDto } from './dto/create-review.dto';
+import { CreateBusinessReviewDto } from './dto/create-business-review.dto';
 import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
 
 @ApiTags('Businesses')
@@ -228,7 +228,7 @@ export class BusinessController {
   createReview(
     @Request() req,
     @Param('id') id: string,
-    @Body() dto: CreateReviewDto,
+    @Body() dto: CreateBusinessReviewDto,
   ) {
     return this.businessService.createReview(id, req.user.id, dto);
   }

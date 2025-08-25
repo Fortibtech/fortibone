@@ -215,6 +215,17 @@ model Product {
   favoritedBy  FavoriteProduct[]
 }
 
+// --- NOUVEAU MODÈLE POUR LA GESTION DES LOTS ---
+model ProductBatch {
+  id              String    @id @default(cuid())
+  quantity        Int       // Quantité restante dans ce lot
+  expirationDate  DateTime? @map("expiration_date") // Date de péremption (optionnelle)
+  receivedAt      DateTime  @default(now()) @map("received_at") // Date de réception du lot
+
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId       String         @map("variant_id")
+}
+
 model ProductVariant {
   id              String  @id @default(cuid())
   sku             String? @unique // Stock Keeping Unit
@@ -237,6 +248,8 @@ model ProductVariant {
   attributeValues VariantAttributeValue[]
   orderLines       OrderLine[]
   stockMovements  StockMovement[]
+  batches         ProductBatch[] // Nouvelle relation vers les lots
+
 }
 
 // Valeur d'un attribut pour une variante (ex: "Taille" = "M", "Couleur" = "Bleu")
@@ -377,6 +390,7 @@ enum MovementType {
   RETURN
   LOSS
   ADJUSTMENT
+  EXPIRATION // Nouvelle raison spécifique pour les pertes dues à la péremption
 }
 
 enum OrderType {

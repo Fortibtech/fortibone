@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 
-export class CreateReviewDto {
+export class CreateBusinessReviewDto {
   @ApiProperty({ description: 'Note de 1 à 5' })
   @IsInt()
   @Min(1)
