@@ -11,7 +11,7 @@ RUN npm run build
 FROM node:18-alpine AS pruner
 WORKDIR /app
 COPY package*.json ./
-RUN pnpm install --omit=dev
+RUN npm install --omit=dev
 
 # ---- Étape 3 : Production ----
 FROM node:18-alpine AS production
