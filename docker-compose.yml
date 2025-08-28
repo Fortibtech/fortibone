@@ -13,10 +13,10 @@ services:
     volumes:
       # Monte le dossier 'uploads' pour que les fichiers persistent même si le conteneur est recréé
       - ./uploads:/app/uploads
-    env_file:
-      - .env.production # Charge les variables d'environnement depuis ce fichier
     depends_on:
-      - db # S'assure que la base de données démarre avant l'API
+      db: # S'assure que la base de données démarre avant l'API
+        condition: service_healthy # Attend que le healthcheck de 'db' passe
+
 
   # Service de la Base de Données PostgreSQL
   db:
@@ -32,6 +32,12 @@ services:
     volumes:
       # Crée un volume Docker pour que les données de la BDD persistent
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 10s # Vérifie toutes les 10 secondes
+      timeout: 5s   # Si la commande prend plus de 5s, elle échoue
+      retries: 5    # Tente 5 fois avant de marquer comme "unhealthy"
+
 
 volumes:
   # Définit le volume pour la persistance des données PostgreSQL
