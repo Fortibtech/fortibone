@@ -17,6 +17,7 @@ import { OrdersModule } from './orders/orders.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // Rend les variables .env disponibles globalement
+      envFilePath: '.env',
     }),
     PrismaModule,
     AuthModule,
