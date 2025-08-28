@@ -8,7 +8,6 @@ services:
       dockerfile: Dockerfile
     container_name: fortibone-api
     restart: unless-stopped
-    command: sh -c "npm run build && tail -f /dev/null"
     ports:
       - "3029:3000"
     volumes:
