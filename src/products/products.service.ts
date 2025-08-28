@@ -177,7 +177,7 @@ export class ProductsService {
 
     let query = `
       SELECT
-        pv.id, pv.price, pv.sku, pv."imageUrl", p.name, p."imageUrl" as "productImageUrl", b.name as "businessName",
+        pv.id, pv.price, pv.sku, pv."image_url", p.name, p."image_url" as "productImageUrl", b.name as "businessName",
         -- Calcul du prix converti
         (pv.price / c."exchange_rate" * ${exchangeRate}) as "convertedPrice"
         ${
@@ -192,10 +192,10 @@ export class ProductsService {
             : ''
         }
       FROM "ProductVariant" pv
-      JOIN "Product" p ON pv."productId" = p.id
-      JOIN "Business" b ON p."businessId" = b.id
-      JOIN "Currency" c ON b."currencyId" = c.id
-      WHERE pv."quantityInStock" > 0
+      JOIN "Product" p ON pv."product_id" = p.id
+      JOIN "Business" b ON p."business_id" = b.id
+      JOIN "Currency" c ON b."currency_id" = c.id
+      WHERE pv."quantity_in_stock" > 0
     `;
 
     // Filtres dynamiques
@@ -205,7 +205,7 @@ export class ProductsService {
       paramIndex++;
     }
     if (filters.categoryId) {
-      query += ` AND p."categoryId" = $${paramIndex}`;
+      query += ` AND p."category_id" = $${paramIndex}`;
       params.push(filters.categoryId);
       paramIndex++;
     }
