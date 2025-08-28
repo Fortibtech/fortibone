@@ -9,7 +9,7 @@ services:
     container_name: fortibone-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3029:3000"
     volumes:
       # Monte le dossier 'uploads' pour que les fichiers persistent même si le conteneur est recréé
       - ./uploads:/app/uploads
@@ -28,7 +28,7 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: ${DATABASE_NAME}
     ports:
-      - "5432:5432"
+      - "5438:5432"
     volumes:
       # Crée un volume Docker pour que les données de la BDD persistent
       - postgres_data:/var/lib/postgresql/data
