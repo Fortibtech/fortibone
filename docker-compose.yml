@@ -8,11 +8,13 @@ services:
       dockerfile: Dockerfile
     container_name: fortibone-api
     restart: unless-stopped
+    command: sh -c "npm run build && tail -f /dev/null"
     ports:
       - "3029:3000"
     volumes:
       # Monte le dossier 'uploads' pour que les fichiers persistent même si le conteneur est recréé
       - ./uploads:/app/uploads
+    
     depends_on:
       db: # S'assure que la base de données démarre avant l'API
         condition: service_healthy # Attend que le healthcheck de 'db' passe
