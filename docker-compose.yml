@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Service de l'API NestJS
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fortibone-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Monte le dossier 'uploads' pour que les fichiers persistent même si le conteneur est recréé
+      - ./uploads:/app/uploads
+    env_file:
+      - .env.production # Charge les variables d'environnement depuis ce fichier
+    depends_on:
+      - db # S'assure que la base de données démarre avant l'API
+
+  # Service de la Base de Données PostgreSQL
+  db:
+    image: postgis/postgis:14-3.4 # Utilise une image officielle avec PostGIS
+    container_name: fortibone-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Crée un volume Docker pour que les données de la BDD persistent
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  # Définit le volume pour la persistance des données PostgreSQL
+  postgres_data:
