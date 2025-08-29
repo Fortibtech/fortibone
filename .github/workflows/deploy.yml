@@ -22,14 +22,11 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Run remote command on VPS
-        run: |
-
-      - name: Deploy to VPS
+      - name: Deploy FortibOne to VPS
         env:
           VPS_HOST: 212.132.99.71
           VPS_USER: root
-          WORK_DIR: /var/www/fortibone-backend
+          WORK_DIR: /var/www/fortibone-backend/
         run: |
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..." 
 
@@ -37,7 +34,7 @@ jobs:
             set -e
             echo "Connected to VPS. Current directory: $(pwd)"
             
-            cd /var/www/fortibone-backend
+            cd /var/www/fortibone-backend/
             echo "Changed to directory: $(pwd)"
 
             echo "Stopping existing containers..."
@@ -50,7 +47,10 @@ jobs:
             sleep 15
 
             echo "Applying database migrations..."
-            docker compose exec -T api sh -c "npx prisma db seed"
+            docker compose exec api npx prisma migrate deploy
+
+            echo "Seeding database (optional)..."
+            docker compose exec api npx prisma db seed
 
             echo "Deployment finished!"
           EOF
