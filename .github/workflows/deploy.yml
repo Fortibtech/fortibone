@@ -48,7 +48,7 @@ jobs:
             docker compose ps
 
             echo "Seeding database (optional)..."
-            docker compose exec api npx prisma db seed
+            docker compose exec api npm run seed
 
             echo "Applying database migrations..."
             docker compose exec api npx prisma migrate deploy
