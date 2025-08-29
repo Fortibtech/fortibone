@@ -44,13 +44,14 @@ jobs:
             docker compose up -d --build
 
             echo "Waiting for database to be healthy..."
-            sleep 15
-
-            echo "Applying database migrations..."
-            docker compose exec api npx prisma migrate deploy
+            sleep 10
+            docker compose ps
 
             echo "Seeding database (optional)..."
             docker compose exec api npx prisma db seed
+
+            echo "Applying database migrations..."
+            docker compose exec api npx prisma migrate deploy
 
             echo "Deployment finished!"
           EOF
