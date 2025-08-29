@@ -45,5 +45,14 @@ jobs:
             echo "Building and starting new containers..."
             docker compose up -d --build
 
+            echo "Waiting for database to be healthy..."
+            sleep 5
+
+            echo "Applying database migrations..."
+            docker-compose exec api npx prisma migrate deploy
+
+            echo "Seeding database (optional)..."
+            docker-compose exec api npm run seed
+
             echo "Deployment finished!"
           EOF
