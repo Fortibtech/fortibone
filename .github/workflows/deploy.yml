@@ -50,7 +50,7 @@ jobs:
             sleep 15
 
             echo "Applying database migrations..."
-            docker compose exec -T api sh -c "npx prisma db seed && npx prisma migrate deploy "
+            docker compose exec -T api sh -c "npx prisma db seed"
 
             echo "Deployment finished!"
           EOF
