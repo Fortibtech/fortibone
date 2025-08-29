@@ -31,7 +31,6 @@ jobs:
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..." 
 
           sshpass -p "lN2mExJY" ssh -o StrictHostKeyChecking=no root@212.132.99.71 << 'EOF'
-            set -e
             echo "Connected to VPS. Current directory: $(pwd)"
             
             cd /var/www/fortibone-backend/
@@ -47,11 +46,11 @@ jobs:
             sleep 10
             docker compose ps
 
-            echo "Applying database migrations..."
-            docker compose exec api npx prisma migrate deploy
-
             echo "Seeding database (optional)..."
             docker compose exec api npm run seed
+
+            echo "Applying database migrations..."
+            docker compose exec api npx prisma migrate deploy
 
             echo "Deployment finished!"
           EOF
