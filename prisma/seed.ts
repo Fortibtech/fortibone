@@ -1,5 +1,6 @@
 import {
   PrismaClient,
+  Prisma,
   ProfileType,
   BusinessType,
   MemberRole,
@@ -8,17 +9,12 @@ import {
   OrderStatus,
   SalesUnit,
   MovementType,
-  Prisma,
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import {
   hashPassword,
-  generateRandomEmail,
   generateRandomPhoneNumber,
   getRandomElement,
-  getRandomElements,
-  getCurrencyByCode,
-  getCategoryByName,
   getAttributeByNameAndCategory,
 } from './utils/helpers';
 
@@ -157,8 +153,7 @@ async function main() {
       country: faker.location.country(),
       city: faker.location.city(),
       gender: getRandomElement(['MALE', 'FEMALE']),
-      // Belles images de profil
-      profileImageUrl: faker.image.avatar(),
+      profileImageUrl: 'https://picsum.photos/seed/alice/150/150', // Image de profil pour Alice
     },
   });
 
@@ -175,8 +170,7 @@ async function main() {
       country: faker.location.country(),
       city: faker.location.city(),
       gender: getRandomElement(['MALE', 'FEMALE']),
-      // Belles images de profil
-      profileImageUrl: faker.image.avatar(),
+      profileImageUrl: 'https://picsum.photos/seed/bob/150/150', // Image de profil pour Bob
     },
   });
 
@@ -193,11 +187,11 @@ async function main() {
       country: faker.location.country(),
       city: faker.location.city(),
       gender: getRandomElement(['MALE', 'FEMALE']),
-      // Belles images de profil
-      profileImageUrl: faker.image.avatar(),
+      profileImageUrl: 'https://picsum.photos/seed/charlie/150/150', // Image de profil pour Charlie
     },
   });
   console.log('Users seeded.');
+
   // --- 4. ENTREPRISES ---
   console.log('Seeding businesses...');
   // Pour la localisation, on crée d'abord l'entreprise sans la localisation, puis on l'update avec une requête RAW
@@ -210,10 +204,8 @@ async function main() {
       type: BusinessType.COMMERCANT,
       address: faker.location.streetAddress(true),
       phoneNumber: generateRandomPhoneNumber(),
-      // --- IMAGES ENTREPRISE ---
-      logoUrl: 'https://via.placeholder.com/150/0000FF/FFFFFF?text=Logo+Bob', // Placeholder bleu
-      coverImageUrl:
-        'https://images.unsplash.com/photo-1542831371-d368e7399839?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHw0OXx8c2hvcHxlbnwwfHx8fDE2OTEzNjE3NDN8MA&ixlib=rb-4.0.3&q=80&w=1080', // Photo de boutique
+      logoUrl: 'https://via.placeholder.com/150/0000FF/FFFFFF?text=BobShop', // Placeholder bleu
+      coverImageUrl: 'https://picsum.photos/seed/shop1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
     },
   });
@@ -232,10 +224,8 @@ async function main() {
       type: BusinessType.RESTAURATEUR,
       address: faker.location.streetAddress(true),
       phoneNumber: generateRandomPhoneNumber(),
-      // --- IMAGES RESTAURANT ---
-      logoUrl: 'https://via.placeholder.com/150/FF0000/FFFFFF?text=Le+Gout', // Placeholder rouge
-      coverImageUrl:
-        'https://images.unsplash.com/photo-1517248135467-4c7edabd34bb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHwzMXx8cmVzdGF1cmFudHxlbnwwfHx8fDE2OTEzNjE2Mzh8MA&ixlib=rb-4.0.3&q=80&w=1080', // Photo de restaurant
+      logoUrl: 'https://via.placeholder.com/150/FF0000/FFFFFF?text=LeGout', // Placeholder rouge
+      coverImageUrl: 'https://picsum.photos/seed/restaurant1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
     },
   });
@@ -254,16 +244,116 @@ async function main() {
       type: BusinessType.FOURNISSEUR,
       address: faker.location.streetAddress(true),
       phoneNumber: generateRandomPhoneNumber(),
-      // --- IMAGES FOURNISSEUR ---
-      logoUrl: 'https://via.placeholder.com/150/00FF00/000000?text=Fournisseur', // Placeholder vert
-      coverImageUrl:
-        'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHwyMHx8ZWxlY3Ryb25pY3N8ZW58MHx8fHwxNjkxMzYxOTUxfDA&ixlib=rb-4.0.3&q=80&w=1080', // Photo d'entrepôt/électronique
+      logoUrl: 'https://via.placeholder.com/150/00FF00/000000?text=SupplierX', // Placeholder vert
+      coverImageUrl: 'https://picsum.photos/seed/supplier1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
     },
   });
   console.log('Businesses seeded.');
 
-  // ... (sections 5 et 6 pour Business Members et Opening Hours - aucun changement ici) ...
+  // --- 5. MEMBRES D'ENTREPRISE ---
+  console.log('Seeding business members...');
+  await prisma.businessMember.create({
+    data: {
+      businessId: shop1.id,
+      userId: proMemberUser.id,
+      role: MemberRole.ADMIN, // Charlie est admin de la boutique de Bob
+    },
+  });
+  console.log('Business members seeded.');
+
+  // --- 6. HORAIRES D'OUVERTURE ---
+  console.log('Seeding opening hours...');
+  await prisma.openingHour.createMany({
+    data: [
+      {
+        businessId: shop1.id,
+        dayOfWeek: DayOfWeek.MONDAY,
+        openTime: '09:00',
+        closeTime: '18:00',
+      },
+      {
+        businessId: shop1.id,
+        dayOfWeek: DayOfWeek.TUESDAY,
+        openTime: '09:00',
+        closeTime: '18:00',
+      },
+      {
+        businessId: shop1.id,
+        dayOfWeek: DayOfWeek.WEDNESDAY,
+        openTime: '09:00',
+        closeTime: '18:00',
+      },
+      {
+        businessId: shop1.id,
+        dayOfWeek: DayOfWeek.THURSDAY,
+        openTime: '09:00',
+        closeTime: '18:00',
+      },
+      {
+        businessId: shop1.id,
+        dayOfWeek: DayOfWeek.FRIDAY,
+        openTime: '09:00',
+        closeTime: '20:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.TUESDAY,
+        openTime: '12:00',
+        closeTime: '14:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.TUESDAY,
+        openTime: '19:00',
+        closeTime: '22:30',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.WEDNESDAY,
+        openTime: '12:00',
+        closeTime: '14:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.WEDNESDAY,
+        openTime: '19:00',
+        closeTime: '22:30',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.THURSDAY,
+        openTime: '12:00',
+        closeTime: '14:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.THURSDAY,
+        openTime: '19:00',
+        closeTime: '22:30',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.FRIDAY,
+        openTime: '12:00',
+        closeTime: '14:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.FRIDAY,
+        openTime: '19:00',
+        closeTime: '23:00',
+      },
+      {
+        businessId: restaurant1.id,
+        dayOfWeek: DayOfWeek.SATURDAY,
+        openTime: '19:00',
+        closeTime: '23:00',
+      },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('Opening hours seeded.');
 
   // --- 7. PRODUITS TEMPLATES ET VARIANTES ---
   console.log('Seeding products and variants...');
@@ -276,22 +366,18 @@ async function main() {
       name: 'T-shirt Casual',
       description: 'T-shirt en coton bio, confortable et stylé.',
       salesUnit: SalesUnit.UNIT,
-      // --- IMAGE PRODUIT ---
-      imageUrl:
-        'https://images.unsplash.com/photo-1620799140408-edc6dcd7dce9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHw3fHx0LXNoaXJ0fGVufDB8fHx8MTY5MTM2Mjg1MXww&ixlib=rb-4.0.3&q=80&w=1080', // Image générique de T-shirt
+      imageUrl: 'https://picsum.photos/seed/tshirt/600/400', // Image générique de T-shirt
     },
   });
 
   const tShirtMBlue = await prisma.productVariant.create({
     data: {
       productId: tShirt.id,
-      price: 19.99,
-      purchasePrice: 10.0,
+      price: new Prisma.Decimal(19.99),
+      purchasePrice: new Prisma.Decimal(10.0),
       quantityInStock: 50,
       sku: 'TSHIRT-M-BLUE',
-      // --- IMAGE VARIANTE ---
-      imageUrl:
-        'https://images.unsplash.com/photo-1571477174528-97a15104d48c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHwxNXx8Ymx1ZSUyMHQtc2hpcnR8ZW58MHx8fHwxNjkxMzYzMDA0fDA&ixlib=rb-4.0.3&q=80&w=1080', // T-shirt bleu
+      imageUrl: 'https://picsum.photos/seed/tshirt-blue/400/300', // T-shirt bleu
       batches: {
         create: [
           { quantity: 30, expirationDate: faker.date.future({ years: 2 }) },
@@ -310,13 +396,11 @@ async function main() {
   const tShirtLRed = await prisma.productVariant.create({
     data: {
       productId: tShirt.id,
-      price: 21.99,
-      purchasePrice: 11.0,
+      price: new Prisma.Decimal(21.99),
+      purchasePrice: new Prisma.Decimal(11.0),
       quantityInStock: 30,
       sku: 'TSHIRT-L-RED',
-      // --- IMAGE VARIANTE ---
-      imageUrl:
-        'https://images.unsplash.com/photo-1521572173163-f2777175949d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHw5fHxyZWQlMjB0LXNoaXJ0fGVufDB8fHx8MTY5MTM2MzAwOXww&ixlib=rb-4.0.3&q=80&w=1080', // T-shirt rouge
+      imageUrl: 'https://picsum.photos/seed/tshirt-red/400/300', // T-shirt rouge
       batches: {
         create: [
           { quantity: 30, expirationDate: faker.date.future({ years: 1 }) },
@@ -339,24 +423,20 @@ async function main() {
       name: 'Smartphone Pro X',
       description: 'Smartphone haut de gamme avec triple capteur photo.',
       salesUnit: SalesUnit.LOT, // Vendu en lots
-      // --- IMAGE PRODUIT ---
-      imageUrl:
-        'https://images.unsplash.com/photo-1580910051074-3fa611fc91d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHw0OXx8c21hcnRwaG9uZXxlbnwwfHx8fDE2OTEzNjE5OTd8MA&ixlib=rb-4.0.3&q=80&w=1080', // Image générique de smartphone
+      imageUrl: 'https://picsum.photos/seed/smartphone/600/400', // Image générique de smartphone
     },
   });
 
   const smartphoneSilver = await prisma.productVariant.create({
     data: {
       productId: smartphone.id,
-      price: 999.0,
-      purchasePrice: 700.0,
+      price: new Prisma.Decimal(999.0),
+      purchasePrice: new Prisma.Decimal(700.0),
       quantityInStock: 20,
       sku: 'SPROX-SILVER',
       itemsPerLot: 5, // 5 unités par lot
-      lotPrice: 3500.0, // Prix de 5 unités
-      // --- IMAGE VARIANTE ---
-      imageUrl:
-        'https://images.unsplash.com/photo-1592891393608-59af5d31481f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0MDk3NDV8MHwxfHNlYXJjaHwxNXx8c2lsdmVyJTIwcGhvbmV8ZW58MHx8fHwxNjkxMzYyMjUzfDA&ixlib=rb-4.0.3&q=80&w=1080', // Smartphone argent
+      lotPrice: new Prisma.Decimal(3500.0), // Prix de 5 unités
+      imageUrl: 'https://picsum.photos/seed/smartphone-silver/400/300', // Smartphone argent
       batches: {
         create: [
           { quantity: 10, expirationDate: faker.date.future({ years: 3 }) },
@@ -443,14 +523,15 @@ async function main() {
         ],
       },
       stockMovements: {
+        // Créer le mouvement de stock associé à la vente
         create: [
           {
             variantId: tShirtMBlue.id,
             businessId: shop1.id,
-            performedById: customerUser.id,
+            performedById: customerUser.id, // Ou l'employé qui a traité
             type: MovementType.SALE,
             quantityChange: -1,
-            newQuantity: tShirtMBlue.quantityInStock - 1,
+            newQuantity: tShirtMBlue.quantityInStock - 1, // Stock après la vente
             reason: `Vente - Commande #SALE-${faker.string.alphanumeric(8).toUpperCase()}`,
           },
         ],
@@ -466,17 +547,19 @@ async function main() {
       status: OrderStatus.DELIVERED,
       totalAmount: new Prisma.Decimal(3500.0),
       notes: 'Commande de réapprovisionnement mensuelle.',
-      businessId: shop1.id, // L'entreprise qui ACHÈTE (le détaillant)
-      customerId: proOwnerUser.id, // L'utilisateur qui a passé la commande (le propriétaire du détaillant)
+      businessId: supplier1.id,
+      customerId: proOwnerUser.id,
+
       purchasingBusinessId: shop1.id, // L'entreprise qui achète
-      employeeId: proOwnerUser.id,
+      employeeId: proOwnerUser.id, // L'employé qui a passé la commande
+
       lines: {
         create: [
           {
             variantId: smartphoneSilver.id,
             quantity: 1,
             price: new Prisma.Decimal(3500.0),
-          },
+          }, // 1 lot
         ],
       },
     },
@@ -488,21 +571,22 @@ async function main() {
       orderNumber: `RES-${faker.string.alphanumeric(8).toUpperCase()}`,
       type: OrderType.RESERVATION,
       status: OrderStatus.CONFIRMED,
-      totalAmount: new Prisma.Decimal(0.0),
+      totalAmount: new Prisma.Decimal(0.0), // Une réservation de table n'a pas forcément un montant initial
       notes: 'Table pour 4 personnes, vue sur la cuisine.',
       businessId: restaurant1.id,
       customerId: customerUser.id,
       tableNumber: 'Table 7',
       reservationDate: faker.date.future(),
       lines: {
-        create: [],
+        create: [
+          // On peut ajouter des plats pré-commandés ici si la réservation le permet
+        ],
       },
     },
   });
 
   console.log('Orders seeded.');
 
-  console.log('Seeding finished.');
   console.log('Seeding finished.');
 }
 
