@@ -72,11 +72,10 @@ export class OrdersService {
         lines: { create: orderLinesData },
       };
 
-     
       if (dto.type === OrderType.PURCHASE) {
         // Logique spécifique aux ACHATS
         // L'entreprise qui reçoit la commande est le FOURNISSEUR
-        orderData.business = { connect: { id: dto.supplierBusinessId } }; 
+        orderData.business = { connect: { id: dto.supplierBusinessId } };
         // L'entreprise qui passe la commande est l'ACHETEUR
         orderData.purchasingBusiness = { connect: { id: dto.businessId } };
         orderData.employee = { connect: { id: user.id } }; // L'employé qui a passé la commande
