@@ -33,8 +33,11 @@ export class LocalStorageProvider implements FileUploader {
       throw new Error('Impossible de sauvegarder le fichier.');
     }
 
-    const port = this.configService.get<number>('PORT', 3000);
-    const url = `http://localhost:${port}/uploads/${filename}`;
+    const baseUrl =
+      this.configService.get<string>('LOCAL_STORAGE_BASE_URL') ||
+      'https://dash.fortibtech.com';
+
+    const url = `${baseUrl}/uploads/${filename}`;
 
     return {
       url: url,
