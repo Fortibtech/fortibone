@@ -177,7 +177,7 @@ export class ProductsService {
 
     let query = `
       SELECT
-        pv.id, pv.price, pv.sku, pv."image_url", p.name, p."image_url" as "productImageUrl", b.name as "businessName",
+        pv.id, p.id as "productId", pv.price, pv.sku, pv."image_url", p.name, p."image_url" as "productImageUrl", b.id as "businessId", b.name as "businessName", b."logo_url" as "businessLogoUrl",
         -- Calcul du prix converti
         (pv.price / c."exchange_rate" * ${exchangeRate}) as "convertedPrice"
         ${

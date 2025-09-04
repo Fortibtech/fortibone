@@ -265,10 +265,22 @@ export class ProductsController {
 
   @Get('products/:id/reviews')
   @ApiOperation({ summary: "Lister les avis d'un produit (paginé)" })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    description: 'Numéro de la page de résultats.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: Number,
+    required: false,
+    description: 'Nombre de résultats par page.',
+  })
   findAllReviews(
     @Param('id') id: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
   ) {
     return this.productsService.findAllReviews(id, { page, limit });
   }
