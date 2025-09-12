@@ -329,6 +329,14 @@ model Order {
   tableNumber     String?   @map("table_number")
   reservationDate DateTime? @map("reservation_date")
 
+   // --- CHAMPS AJOUTÉS POUR LE PAIEMENT ---
+  paymentMethod PaymentMethodEnum? @map("payment_method")
+  paymentIntentId String?          @unique @map("payment_intent_id") // ID du PaymentIntent de Stripe, etc.
+  transactionId   String?          @unique @map("transaction_id")    // ID final de la transaction validée
+  // ------------------------------------
+
+  payments      PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
+
   lines          OrderLine[]
   stockMovements StockMovement[]
 }
@@ -343,6 +351,22 @@ model OrderLine {
   orderId   String         @map("order_id")
   variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
   variantId String         @map("variant_id")
+}
+
+// --- NOUVEAU MODÈLE POUR LE SUIVI DES TRANSACTIONS DE PAIEMENT ---
+model PaymentTransaction {
+  id                  String           @id @default(cuid())
+  amount              Decimal
+  currencyCode        String           @map("currency_code")
+  provider            PaymentMethodEnum // Ex: STRIPE, MVOLA, MANUAL
+  providerTransactionId String?          @unique @map("provider_transaction_id") // L'ID côté fournisseur (ex: ch_12345)
+  status              PaymentStatus    @default(PENDING) // PENDING, SUCCESS, FAILED, REFUNDED
+  metadata            Json?            // Pour stocker des informations spécifiques au fournisseur
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  order               Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId             String           @map("order_id")
 }
 
 model Review {
@@ -401,13 +425,36 @@ enum OrderType {
 
 enum OrderStatus {
   PENDING
+  PENDING_PAYMENT // Nouveau: La commande attend le paiement
+  PAID          // Nouveau: Paiement reçu
+  PAYMENT_FAILED  // Nouveau: Paiement échoué
   CONFIRMED
   PROCESSING
   SHIPPED
   DELIVERED
   COMPLETED
   CANCELLED
+  REJECTED      // Nouveau: Commande rejetée par le vendeur (utile pour B2B)
+  PENDING_APPROVAL // Nouveau: Pour les commandes B2B en attente d'acceptation par le fournisseur
+  PENDING_REFUND // Nouveau: Remboursement en cours
+  REFUNDED      // Nouveau: Entièrement remboursé
+  PARTIALLY_REFUNDED // Nouveau: Partiellement remboursé  
+}
+
+// Nouvelle Enum pour les méthodes de paiement
+enum PaymentMethodEnum {
+  STRIPE
+  MVOLA // Exemple pour le paiement local Comorien
+  MANUAL
+}
+
+// Nouvelle Enum pour le statut des transactions de paiement
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 
