@@ -108,6 +108,24 @@ export class OrdersService {
     });
   }
 
+   // --- Nouvelle méthode utilitaire pour les mises à jour de statut atomiques ---
+  async updateOrderStatusLogic(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    newStatus: OrderStatus,
+    transactionId?: string, // L'ID de la transaction de paiement associée
+  ) {
+    const data: Prisma.OrderUpdateInput = { status: newStatus };
+    if (transactionId) {
+      data.transactionId = transactionId;
+    }
+    return tx.order.update({
+      where: { id: orderId },
+      data,
+      include: { business: { include: { currency: true } } }, // Inclure pour la réponse
+    });
+  }
+
   async findOne(id: string, tx?: Prisma.TransactionClient) {
     const db = tx || this.prisma;
     const order = await db.order.findUnique({

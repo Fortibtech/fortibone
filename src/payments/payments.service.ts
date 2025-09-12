@@ -7,22 +7,17 @@ import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin
 
 @Injectable()
 export class PaymentsService {
-  private paymentProviders: Map<PaymentMethodEnum, PaymentProvider> = new Map();
+  private paymentProviders: Map<PaymentMethodEnum, PaymentProvider>;
 
   constructor(
     private readonly prisma: PrismaService,
-    // @Inject(PaymentProvider) permet d'injecter tous les providers qui implémentent PaymentProvider
-    // Nous allons l'implémenter après avoir créé les providers concrets.
-    // Pour l'instant, nous le laissons commenté ou injectons manuellement
-    // private readonly allPaymentProviders: PaymentProvider[], // Cette ligne sera activée plus tard
-    private readonly ordersService: OrdersService, // On aura besoin d'OrdersService
+    @Inject('PAYMENT_PROVIDERS_MAP') paymentProvidersMap: Map<PaymentMethodEnum, PaymentProvider>,
+    @Inject(forwardRef(() => OrdersService)) // Pour résoudre la dépendance circulaire
+    private readonly ordersService: OrdersService,
   ) {
-    // Cette boucle sera activée une fois que allPaymentProviders sera injecté
-    // for (const provider of allPaymentProviders) {
-    //   this.paymentProviders.set(provider.method, provider);
-    // }
+    this.paymentProviders = paymentProvidersMap;
   }
-
+  
   private getProvider(method: PaymentMethodEnum): PaymentProvider {
     const provider = this.paymentProviders.get(method);
     if (!provider) {

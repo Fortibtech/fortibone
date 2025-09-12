@@ -1,24 +1,43 @@
 // src/payments/payments.module.ts
-import { Module } from '@nestjs/common';
+import { Module, Provider, forwardRef } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 import { PrismaModule } from '../prisma/prisma.module';
-import { ConfigModule } from '@nestjs/config';
-import { PaymentProvider } from './interfaces/payment-provider.interface'; // Importer l'interface
-import { PaymentsController } from './payments.controller';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PaymentProvider } from './interfaces/payment-provider.interface';
+import { StripeProvider } from './providers/stripe.provider';
+import { OrdersModule } from 'src/orders/orders.module';
 
-// On ne met pas encore les fournisseurs concrets ici. Ils viendront dans la phase 2.
-// Le module sera d'abord vide de providers concrets de paiement.
-// Cela sera ajusté dans la Phase 2.
+const paymentProviders: Provider[] = [
+  StripeProvider,
+  // ... MvolaProvider, ManualPaymentProvider viendront ici ...
+];
 
 @Module({
-  imports: [PrismaModule, ConfigModule],
+  imports: [
+    PrismaModule,
+    ConfigModule,
+    forwardRef(() => OrdersModule), // Gérer la dépendance circulaire
+  ],
   providers: [
     PaymentsService,
-    // Ici viendra la logique 'useFactory' pour injecter dynamiquement le bon provider
-    // Une fois que les providers concrets (StripeProvider, MvolaProvider, etc.) seront créés.
+    ...paymentProviders, // Enregistrer tous les fournisseurs concrets
+
+    // Provider dynamique qui injecte tous les PaymentProvider dans PaymentsService
+    {
+      provide: 'PAYMENT_PROVIDERS_MAP', // Utiliser un token personnalisé
+      useFactory: (
+        configService: ConfigService,
+        ...providers: PaymentProvider[] // NestJS va collecter toutes les instances de PaymentProvider
+      ) => {
+        const providerMap = new Map<PaymentMethodEnum, PaymentProvider>();
+        providers.forEach((p) => providerMap.set(p.method, p));
+        return providerMap;
+      },
+      inject: [ConfigService, ...paymentProviders], // Injecter les fournisseurs concrets
+    },
   ],
   controllers: [PaymentsController],
-  exports: [PaymentsService], // Exporter pour que OrdersModule puisse l'utiliser
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}
