@@ -1,7 +1,13 @@
 // src/payments/dto/initiate-payment.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethodEnum } from '@prisma/client';
-import { IsEnum, IsOptional, IsObject } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsObject,
+  IsString,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class InitiatePaymentDto {
   @ApiProperty({
@@ -10,6 +16,15 @@ export class InitiatePaymentDto {
   })
   @IsEnum(PaymentMethodEnum)
   method: PaymentMethodEnum;
+
+  @ApiPropertyOptional({
+    description:
+      'ID de la méthode de paiement (ex: pm_xxxxxxxx) généré côté frontend par Stripe. Requis pour la méthode STRIPE.',
+  })
+  @IsOptional() // Optionnel car non applicable à toutes les méthodes (ex: Mvola)
+  @IsString()
+  @IsNotEmpty()
+  paymentMethodId?: string;
 
   @ApiPropertyOptional({
     description:

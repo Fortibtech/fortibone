@@ -219,13 +219,13 @@ export class MvolaProvider implements PaymentProvider {
 
   async handleWebhook(
     payload: any,
-    signature?: string,
+    headers?: Record<string, any>,
   ): Promise<WebhookResult> {
     // --- 1. Vérification de la signature du webhook (si Mvola supporte) ---
     // La documentation fournie ne détaille pas le mécanisme de signature des webhooks Mvola.
     // Il est CRITIQUE de le mettre en place si Mvola fournit ce mécanisme.
     // Pour l'instant, on se base sur la confiance du callback URL (moins sécurisé).
-    if (this.webhookSecret && signature) {
+    if (this.webhookSecret) {
       // Logique de vérification de signature Mvola ici
       // Ex: const expectedSignature = crypto.createHmac('sha256', this.webhookSecret).update(JSON.stringify(payload)).digest('hex');
       // if (expectedSignature !== signature) throw new UnauthorizedException('Signature de webhook Mvola invalide.');

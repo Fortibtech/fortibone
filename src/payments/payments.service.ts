@@ -54,59 +54,63 @@ export class PaymentsService {
     method: PaymentMethodEnum,
     metadata?: any,
   ): Promise<PaymentIntentResult> {
-    return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-        include: { business: { include: { currency: true } } },
-      });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { business: { include: { currency: true } } },
+        });
 
-      if (!order) {
-        throw new NotFoundException('Commande non trouvée.');
-      }
-      if (order.status !== 'PENDING_PAYMENT') {
-        throw new BadRequestException(
-          `La commande n'est pas en attente de paiement (statut actuel: ${order.status}).`,
-        );
-      }
-      if (order.customerId !== user.id) {
-        throw new ForbiddenException(
-          "Vous n'êtes pas autorisé à payer cette commande.",
-        );
-      }
+        if (!order) {
+          throw new NotFoundException('Commande non trouvée.');
+        }
+        if (order.status !== 'PENDING_PAYMENT') {
+          throw new BadRequestException(
+            `La commande n'est pas en attente de paiement (statut actuel: ${order.status}).`,
+          );
+        }
+        if (order.customerId !== user.id) {
+          throw new ForbiddenException(
+            "Vous n'êtes pas autorisé à payer cette commande.",
+          );
+        }
 
-      // Déleguer à l'implémentation spécifique du fournisseur
-      const provider = this.getProvider(method);
-      const result = await provider.createPaymentIntent(
-        order,
-        user,
-        tx as any,
-        metadata,
-      );
-
-      // Mettre à jour l'ordre avec les infos de l'intent
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          paymentMethod: method,
-          paymentIntentId: result.transactionId,
-        },
-      });
-
-      // Créer l'entrée de transaction de paiement
-      await tx.paymentTransaction.create({
-        data: {
-          orderId: order.id,
-          amount: order.totalAmount,
-          currencyCode: order.business.currency?.code || 'EUR',
-          provider: method,
-          providerTransactionId: result.transactionId,
-          status: result.status,
+        // Déleguer à l'implémentation spécifique du fournisseur
+        const provider = this.getProvider(method);
+        // CORRECTION ICI : Passer paymentMethodId au provider
+        const result = await provider.createPaymentIntent(
+          order,
+          user,
+          tx as any,
           metadata,
-        },
-      });
+        );
 
-      return result;
-    });
+        // Mettre à jour l'ordre avec les infos de l'intent
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paymentMethod: method,
+            paymentIntentId: result.transactionId,
+          },
+        });
+
+        // Créer l'entrée de transaction de paiement
+        await tx.paymentTransaction.create({
+          data: {
+            orderId: order.id,
+            amount: order.totalAmount,
+            currencyCode: order.business.currency?.code || 'EUR',
+            provider: method,
+            providerTransactionId: result.transactionId,
+            status: result.status,
+            metadata,
+          },
+        });
+
+        return result;
+      },
+      { timeout: 120000 },
+    );
   }
 
   async confirmManualPayment(
@@ -154,13 +158,13 @@ export class PaymentsService {
   async processWebhook(
     providerMethod: PaymentMethodEnum,
     payload: any,
-    signature?: string,
+    headers: Record<string, string>, // <--- NOUVEAU PARAMÈTRE : tous les headers
   ): Promise<any> {
     // NOTE: Cette logique sera enrichie quand nous aurons des fournisseurs concrets
     // Pour l'instant, c'est un placeholder.
     console.log(`Webhook received for ${providerMethod}`, payload);
     const provider = this.getProvider(providerMethod);
-    const result = await provider.handleWebhook(payload, signature);
+    const result = await provider.handleWebhook(payload, headers);
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.paymentTransaction.findUnique({

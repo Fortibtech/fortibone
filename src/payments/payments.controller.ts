@@ -31,12 +31,12 @@ export class PaymentsController {
   ) {}
 
   @Post('orders/:orderId/pay')
-  @UseGuards(JwtAuthGuard) // L'utilisateur client doit être authentifié pour initier son paiement
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Initier un paiement pour une commande',
     description:
-      'Crée une intention de paiement avec le fournisseur spécifié et retourne les informations nécessaires au frontend (ex: client_secret pour Stripe, redirectUrl pour Mvola).',
+      "Crée une intention de paiement avec le fournisseur spécifié. Pour Stripe, si un `paymentMethodId` est fourni dans `metadata`, la transaction tentera d'être confirmée automatiquement.",
   })
   @ApiResponse({
     status: 200,
@@ -76,24 +76,25 @@ export class PaymentsController {
   // Ne pas utiliser JwtAuthGuard ici, les webhooks ont leur propre mécanisme de sécurité (signature)
   async handleWebhook(
     @Param('provider') provider: string,
-    @Headers('stripe-signature') stripeSignature: string, // Spécifique à Stripe
-    @Headers('x-mvola-signature') mvolaSignature: string, // Spécifique à Mvola (si supporté)
-    @Body() payload: any,
+    @Headers() headers: Record<string, string>, // Collecter TOUS les headers
+
+    @Body() payload?: any,
   ) {
     const providerEnum = PaymentMethodEnum[provider.toUpperCase()];
     if (!providerEnum) {
       throw new BadRequestException('Fournisseur de paiement non reconnu.');
     }
-    // Passer la signature pertinente au service
-    const signature =
+    // Le body du webhook Stripe arrive souvent comme une chaîne de caractères brute.
+    // Il faut le passer tel quel au service pour que Stripe.webhooks.constructEvent puisse le parser.
+    // Pour Mvola, le payload est généralement déjà un objet JSON.
+    const rawBody =
       providerEnum === PaymentMethodEnum.STRIPE
-        ? stripeSignature
-        : mvolaSignature;
-    return this.paymentsService.processWebhook(
-      providerEnum,
-      payload,
-      signature,
-    );
+        ? JSON.stringify(payload)
+        : payload;
+
+    // Le service se chargera de récupérer la bonne signature dans l'objet 'headers'
+    // et de vérifier la validité du payload.
+    return this.paymentsService.processWebhook(providerEnum, rawBody, headers);
   }
 
   @Post('orders/:orderId/confirm-manual-payment')

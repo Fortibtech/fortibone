@@ -52,7 +52,7 @@ export class ManualPaymentProvider implements PaymentProvider {
   // La gestion des webhooks n'est pas applicable aux paiements manuels.
   async handleWebhook(
     payload: any,
-    signature?: string,
+    headers?: Record<string, any>,
   ): Promise<WebhookResult> {
     throw new BadRequestException(
       'Les webhooks ne sont pas applicables au fournisseur de paiement manuel.',
