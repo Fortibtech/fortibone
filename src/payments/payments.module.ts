@@ -11,11 +11,12 @@ import { HttpModule, HttpService } from '@nestjs/axios'; // Assurez-vous que Htt
 import { StripeProvider } from './providers/stripe.provider';
 import { PaymentMethodEnum } from '@prisma/client';
 import { OrdersService } from 'src/orders/orders.service';
+import { ManualPaymentProvider } from './providers/manual.provider';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
-  MvolaProvider, // Ajouter MvolaProvider
-  // ...
+  MvolaProvider,
+  ManualPaymentProvider,
 ];
 
 @Module({

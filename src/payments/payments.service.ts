@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   Order,
+  OrderStatus,
   PaymentMethodEnum,
   PaymentStatus,
   Prisma,
@@ -120,20 +121,16 @@ export class PaymentsService {
       });
 
       if (!order) throw new NotFoundException('Commande non trouvée.');
-      if (order.status !== 'PENDING_PAYMENT') {
-        throw new BadRequestException(
-          `La commande n'est pas en attente de paiement manuel (statut actuel: ${order.status}).`,
-        );
-      }
-      // Vérifier que l'utilisateur est admin ou propriétaire de l'entreprise
       if (
-        // adminUser.profileType !== ProfileType.ADMIN &&
-        order.business.ownerId !== adminUser.id
+        order.status !== 'PENDING_PAYMENT' ||
+        order.paymentMethod !== PaymentMethodEnum.MANUAL
       ) {
-        throw new ForbiddenException(
-          "Vous n'êtes pas autorisé à confirmer ce paiement manuel.",
+        throw new BadRequestException(
+          `La commande n'est pas en attente de confirmation de paiement manuel.`,
         );
       }
+      // La vérification d'autorisation est maintenant faite dans le provider spécifique.
+      // Le provider aura besoin de l'objet User complet pour ses vérifications.
 
       const provider = this.getProvider(PaymentMethodEnum.MANUAL);
       const transaction = await provider.confirmManualPayment(
@@ -144,10 +141,11 @@ export class PaymentsService {
       );
 
       // Mettre à jour la commande après confirmation manuelle
+      // La méthode updateOrderStatusLogic s'assurera que le status passe bien à PAID
       return this.ordersService.updateOrderStatusLogic(
         tx,
         order.id,
-        'PAID',
+        OrderStatus.PAID,
         transaction.id,
       );
     });
