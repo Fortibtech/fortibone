@@ -1,40 +1,50 @@
 // src/payments/payments.module.ts
 import { Module, Provider, forwardRef } from '@nestjs/common';
-import { PaymentsService } from './payments.service';
-import { PaymentsController } from './payments.controller';
-import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { PaymentProvider } from './interfaces/payment-provider.interface';
-import { StripeProvider } from './providers/stripe.provider';
 import { OrdersModule } from 'src/orders/orders.module';
+import { PrismaModule } from 'src/prisma/prisma.module';
+import { PaymentProvider } from './interfaces/payment-provider.interface';
+import { PaymentsController } from './payments.controller';
+import { PaymentsService } from './payments.service';
+import { MvolaProvider } from './providers/mvola.provider';
+import { HttpModule, HttpService } from '@nestjs/axios'; // Assurez-vous que HttpModule est importé
+import { StripeProvider } from './providers/stripe.provider';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
-  // ... MvolaProvider, ManualPaymentProvider viendront ici ...
+  MvolaProvider, // Ajouter MvolaProvider
+  // ...
 ];
 
 @Module({
   imports: [
     PrismaModule,
     ConfigModule,
-    forwardRef(() => OrdersModule), // Gérer la dépendance circulaire
+    HttpModule, // Ajouter HttpModule ici
+    forwardRef(() => OrdersModule),
   ],
   providers: [
     PaymentsService,
-    ...paymentProviders, // Enregistrer tous les fournisseurs concrets
-
-    // Provider dynamique qui injecte tous les PaymentProvider dans PaymentsService
+    ...paymentProviders,
     {
-      provide: 'PAYMENT_PROVIDERS_MAP', // Utiliser un token personnalisé
+      provide: 'PAYMENT_PROVIDERS_MAP',
       useFactory: (
         configService: ConfigService,
-        ...providers: PaymentProvider[] // NestJS va collecter toutes les instances de PaymentProvider
+        httpService: HttpService,
+        ...providers: PaymentProvider[]
       ) => {
         const providerMap = new Map<PaymentMethodEnum, PaymentProvider>();
-        providers.forEach((p) => providerMap.set(p.method, p));
+        // Passer HttpService aux providers qui en ont besoin
+        providers.forEach((p) => {
+          if (p instanceof MvolaProvider) {
+            // S'assurer que le MvolaProvider a accès à HttpService et ConfigService
+            Object.assign(p, new MvolaProvider(configService, httpService));
+          }
+          providerMap.set(p.method, p);
+        });
         return providerMap;
       },
-      inject: [ConfigService, ...paymentProviders], // Injecter les fournisseurs concrets
+      inject: [ConfigService, HttpService, ...paymentProviders],
     },
   ],
   controllers: [PaymentsController],
