@@ -108,7 +108,7 @@ export class OrdersService {
     });
   }
 
-   // --- Nouvelle méthode utilitaire pour les mises à jour de statut atomiques ---
+  // --- Nouvelle méthode utilitaire pour les mises à jour de statut atomiques ---
   async updateOrderStatusLogic(
     tx: Prisma.TransactionClient,
     orderId: string,

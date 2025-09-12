@@ -1,8 +1,24 @@
 // src/payments/payments.service.ts
-import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Order, PaymentMethodEnum, PaymentStatus, Prisma, User } from '@prisma/client';
-import { PaymentProvider, PaymentIntentResult, RefundResult } from './interfaces/payment-provider.interface';
+import {
+  Order,
+  PaymentMethodEnum,
+  PaymentStatus,
+  Prisma,
+  User,
+} from '@prisma/client';
+import {
+  PaymentProvider,
+  PaymentIntentResult,
+  RefundResult,
+} from './interfaces/payment-provider.interface';
 import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin du service des commandes
 
 @Injectable()
@@ -11,17 +27,20 @@ export class PaymentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('PAYMENT_PROVIDERS_MAP') paymentProvidersMap: Map<PaymentMethodEnum, PaymentProvider>,
+    @Inject('PAYMENT_PROVIDERS_MAP')
+    paymentProvidersMap: Map<PaymentMethodEnum, PaymentProvider>,
     @Inject(forwardRef(() => OrdersService)) // Pour résoudre la dépendance circulaire
     private readonly ordersService: OrdersService,
   ) {
     this.paymentProviders = paymentProvidersMap;
   }
-  
+
   private getProvider(method: PaymentMethodEnum): PaymentProvider {
     const provider = this.paymentProviders.get(method);
     if (!provider) {
-      throw new BadRequestException(`Le fournisseur de paiement "${method}" n'est pas configuré.`);
+      throw new BadRequestException(
+        `Le fournisseur de paiement "${method}" n'est pas configuré.`,
+      );
     }
     return provider;
   }
@@ -42,15 +61,24 @@ export class PaymentsService {
         throw new NotFoundException('Commande non trouvée.');
       }
       if (order.status !== 'PENDING_PAYMENT') {
-        throw new BadRequestException(`La commande n'est pas en attente de paiement (statut actuel: ${order.status}).`);
+        throw new BadRequestException(
+          `La commande n'est pas en attente de paiement (statut actuel: ${order.status}).`,
+        );
       }
       if (order.customerId !== user.id) {
-        throw new ForbiddenException('Vous n\'êtes pas autorisé à payer cette commande.');
+        throw new ForbiddenException(
+          "Vous n'êtes pas autorisé à payer cette commande.",
+        );
       }
 
       // Déleguer à l'implémentation spécifique du fournisseur
       const provider = this.getProvider(method);
-      const result = await provider.createPaymentIntent(order, user, tx, metadata);
+      const result = await provider.createPaymentIntent(
+        order,
+        user,
+        tx,
+        metadata,
+      );
 
       // Mettre à jour l'ordre avec les infos de l'intent
       await tx.order.update({
@@ -91,21 +119,38 @@ export class PaymentsService {
 
       if (!order) throw new NotFoundException('Commande non trouvée.');
       if (order.status !== 'PENDING_PAYMENT') {
-        throw new BadRequestException(`La commande n'est pas en attente de paiement manuel (statut actuel: ${order.status}).`);
+        throw new BadRequestException(
+          `La commande n'est pas en attente de paiement manuel (statut actuel: ${order.status}).`,
+        );
       }
       // Vérifier que l'utilisateur est admin ou propriétaire de l'entreprise
-      if (adminUser.profileType !== ProfileType.ADMIN && order.business.ownerId !== adminUser.id) {
-        throw new ForbiddenException('Vous n\'êtes pas autorisé à confirmer ce paiement manuel.');
+      if (
+        adminUser.profileType !== ProfileType.ADMIN &&
+        order.business.ownerId !== adminUser.id
+      ) {
+        throw new ForbiddenException(
+          "Vous n'êtes pas autorisé à confirmer ce paiement manuel.",
+        );
       }
 
       const provider = this.getProvider(PaymentMethodEnum.MANUAL);
-      const transaction = await provider.confirmManualPayment(order, adminUser, tx, details);
+      const transaction = await provider.confirmManualPayment(
+        order,
+        adminUser,
+        tx,
+        details,
+      );
 
       // Mettre à jour la commande après confirmation manuelle
-      return this.ordersService.updateOrderStatusLogic(tx, order.id, 'PAID', transaction.id);
+      return this.ordersService.updateOrderStatusLogic(
+        tx,
+        order.id,
+        'PAID',
+        transaction.id,
+      );
     });
   }
-  
+
   async processWebhook(
     providerMethod: PaymentMethodEnum,
     payload: any,
@@ -122,7 +167,9 @@ export class PaymentsService {
         where: { providerTransactionId: result.transactionId },
       });
       if (!transaction) {
-        throw new NotFoundException(`Transaction de paiement ${result.transactionId} non trouvée.`);
+        throw new NotFoundException(
+          `Transaction de paiement ${result.transactionId} non trouvée.`,
+        );
       }
 
       // Mettre à jour la transaction
@@ -133,13 +180,28 @@ export class PaymentsService {
 
       // Mettre à jour le statut de la commande si le paiement est un succès
       if (result.status === 'SUCCESS') {
-        return this.ordersService.updateOrderStatusLogic(tx, result.orderId, 'PAID', transaction.id);
+        return this.ordersService.updateOrderStatusLogic(
+          tx,
+          result.orderId,
+          'PAID',
+          transaction.id,
+        );
       } else if (result.status === 'FAILED') {
-        return this.ordersService.updateOrderStatusLogic(tx, result.orderId, 'PAYMENT_FAILED');
+        return this.ordersService.updateOrderStatusLogic(
+          tx,
+          result.orderId,
+          'PAYMENT_FAILED',
+        );
       } else if (result.status === 'REFUNDED') {
-        return this.ordersService.updateOrderStatusLogic(tx, result.orderId, 'REFUNDED');
+        return this.ordersService.updateOrderStatusLogic(
+          tx,
+          result.orderId,
+          'REFUNDED',
+        );
       }
-      return { message: 'Webhook processed, but no order status change triggered.' };
+      return {
+        message: 'Webhook processed, but no order status change triggered.',
+      };
     });
   }
 
@@ -159,24 +221,46 @@ export class PaymentsService {
 
       if (!order) throw new NotFoundException('Commande non trouvée.');
       // Vérifier que l'utilisateur est admin ou propriétaire de l'entreprise
-      if (adminUser.profileType !== ProfileType.ADMIN && order.business.ownerId !== adminUser.id) {
-        throw new ForbiddenException('Vous n\'êtes pas autorisé à rembourser cette commande.');
+      if (
+        adminUser.profileType !== ProfileType.ADMIN &&
+        order.business.ownerId !== adminUser.id
+      ) {
+        throw new ForbiddenException(
+          "Vous n'êtes pas autorisé à rembourser cette commande.",
+        );
       }
       if (order.status !== 'PAID') {
-        throw new BadRequestException('Seules les commandes payées peuvent être remboursées.');
+        throw new BadRequestException(
+          'Seules les commandes payées peuvent être remboursées.',
+        );
       }
 
       const lastPaymentTransaction = order.payments[0];
       if (!lastPaymentTransaction) {
-        throw new BadRequestException('Aucune transaction de paiement trouvée pour cette commande.');
+        throw new BadRequestException(
+          'Aucune transaction de paiement trouvée pour cette commande.',
+        );
       }
 
       const provider = this.getProvider(lastPaymentTransaction.provider);
-      const refundResult = await provider.refundPayment(order, adminUser, amount, tx);
+      const refundResult = await provider.refundPayment(
+        order,
+        adminUser,
+        amount,
+        tx,
+      );
 
       // Mettre à jour le statut de la commande en fonction du remboursement
-      const newOrderStatus = amount && amount < order.totalAmount.toNumber() ? 'PARTIALLY_REFUNDED' : 'REFUNDED';
-      return this.ordersService.updateOrderStatusLogic(tx, order.id, newOrderStatus, refundResult.transactionId);
+      const newOrderStatus =
+        amount && amount < order.totalAmount.toNumber()
+          ? 'PARTIALLY_REFUNDED'
+          : 'REFUNDED';
+      return this.ordersService.updateOrderStatusLogic(
+        tx,
+        order.id,
+        newOrderStatus,
+        refundResult.transactionId,
+      );
     });
   }
 }

@@ -1,7 +1,22 @@
 // src/payments/providers/stripe.provider.ts
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { PaymentProvider, PaymentIntentResult, WebhookResult, RefundResult } from '../interfaces/payment-provider.interface';
-import { Order, PaymentMethodEnum, PaymentStatus, PrismaClient, User } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import {
+  PaymentProvider,
+  PaymentIntentResult,
+  WebhookResult,
+  RefundResult,
+} from '../interfaces/payment-provider.interface';
+import {
+  Order,
+  PaymentMethodEnum,
+  PaymentStatus,
+  PrismaClient,
+  User,
+} from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { Prisma } from '@prisma/client'; // Pour utiliser Prisma.Decimal
@@ -14,14 +29,18 @@ export class StripeProvider implements PaymentProvider {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('STRIPE_API_KEY');
-    this.webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+    this.webhookSecret = this.configService.get<string>(
+      'STRIPE_WEBHOOK_SECRET',
+    );
 
     if (!apiKey) {
       throw new InternalServerErrorException('Clé API Stripe non configurée.');
     }
     if (!this.webhookSecret) {
       // Ceci est moins critique pour le dev, mais indispensable en prod
-      console.warn('STRIPE_WEBHOOK_SECRET non configurée. Les webhooks Stripe ne seront pas validés.');
+      console.warn(
+        'STRIPE_WEBHOOK_SECRET non configurée. Les webhooks Stripe ne seront pas validés.',
+      );
     }
 
     this.stripe = new Stripe(apiKey, {
@@ -37,9 +56,11 @@ export class StripeProvider implements PaymentProvider {
   ): Promise<PaymentIntentResult> {
     if (!order.business || !order.business.currency) {
       // Vérification que les relations nécessaires sont incluses dans 'order'
-      throw new InternalServerErrorException('Informations sur la devise de l\'entreprise manquantes pour le paiement.');
+      throw new InternalServerErrorException(
+        "Informations sur la devise de l'entreprise manquantes pour le paiement.",
+      );
     }
-    
+
     try {
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: order.totalAmount.mul(100).toNumber(), // Montant en centimes
@@ -61,8 +82,13 @@ export class StripeProvider implements PaymentProvider {
         status: PaymentStatus.PENDING,
       };
     } catch (error) {
-      console.error('Erreur lors de la création du PaymentIntent Stripe:', error);
-      throw new InternalServerErrorException('Impossible de créer l\'intention de paiement via Stripe.');
+      console.error(
+        'Erreur lors de la création du PaymentIntent Stripe:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        "Impossible de créer l'intention de paiement via Stripe.",
+      );
     }
   }
 
@@ -78,14 +104,18 @@ export class StripeProvider implements PaymentProvider {
           this.webhookSecret,
         );
       } catch (err) {
-        console.error(`Erreur de vérification de signature Stripe: ${err.message}`);
+        console.error(
+          `Erreur de vérification de signature Stripe: ${err.message}`,
+        );
         throw new BadRequestException(`Signature de webhook invalide.`);
       }
     } else if (!this.webhookSecret) {
-        console.warn('STRIPE_WEBHOOK_SECRET non configurée. Contournement de la vérification de signature du webhook. NE PAS FAIRE EN PRODUCTION.');
-        event = payload as Stripe.Event; // Contournement pour le dev si le secret est absent
+      console.warn(
+        'STRIPE_WEBHOOK_SECRET non configurée. Contournement de la vérification de signature du webhook. NE PAS FAIRE EN PRODUCTION.',
+      );
+      event = payload as Stripe.Event; // Contournement pour le dev si le secret est absent
     } else {
-        throw new BadRequestException('Signature de webhook manquante.');
+      throw new BadRequestException('Signature de webhook manquante.');
     }
 
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
@@ -93,7 +123,9 @@ export class StripeProvider implements PaymentProvider {
     const transactionId = paymentIntent.id;
 
     if (!orderId || !transactionId) {
-      throw new BadRequestException('ID de commande ou ID de transaction manquant dans les métadonnées du PaymentIntent.');
+      throw new BadRequestException(
+        'ID de commande ou ID de transaction manquant dans les métadonnées du PaymentIntent.',
+      );
     }
 
     let status: PaymentStatus;
@@ -125,7 +157,9 @@ export class StripeProvider implements PaymentProvider {
       orderId,
       transactionId,
       status,
-      amount: paymentIntent.amount_received ? paymentIntent.amount_received / 100 : undefined,
+      amount: paymentIntent.amount_received
+        ? paymentIntent.amount_received / 100
+        : undefined,
       currency: paymentIntent.currency,
       metadata: paymentIntent.metadata,
     };
@@ -139,23 +173,32 @@ export class StripeProvider implements PaymentProvider {
   ): Promise<RefundResult> {
     // Logique pour le remboursement Stripe
     if (!order.paymentIntentId) {
-        throw new BadRequestException('Cette commande n\'a pas d\'ID PaymentIntent Stripe.');
+      throw new BadRequestException(
+        "Cette commande n'a pas d'ID PaymentIntent Stripe.",
+      );
     }
-    
-    try {
-        const refund = await this.stripe.refunds.create({
-            payment_intent: order.paymentIntentId,
-            amount: amount ? new Prisma.Decimal(amount).mul(100).toNumber() : undefined, // Montant en centimes
-        });
 
-        return {
-            transactionId: refund.id,
-            status: refund.status === 'succeeded' ? PaymentStatus.REFUNDED : PaymentStatus.PENDING_REFUND,
-            amountRefunded: refund.amount / 100,
-        };
+    try {
+      const refund = await this.stripe.refunds.create({
+        payment_intent: order.paymentIntentId,
+        amount: amount
+          ? new Prisma.Decimal(amount).mul(100).toNumber()
+          : undefined, // Montant en centimes
+      });
+
+      return {
+        transactionId: refund.id,
+        status:
+          refund.status === 'succeeded'
+            ? PaymentStatus.REFUNDED
+            : PaymentStatus.PENDING_REFUND,
+        amountRefunded: refund.amount / 100,
+      };
     } catch (error) {
-        console.error('Erreur lors du remboursement Stripe:', error);
-        throw new InternalServerErrorException('Impossible de traiter le remboursement via Stripe.');
+      console.error('Erreur lors du remboursement Stripe:', error);
+      throw new InternalServerErrorException(
+        'Impossible de traiter le remboursement via Stripe.',
+      );
     }
   }
 
@@ -167,6 +210,8 @@ export class StripeProvider implements PaymentProvider {
   ): Promise<PaymentTransaction> {
     // Cette méthode n'est pas pertinente pour Stripe, car Stripe est un paiement externe.
     // Elle serait vide ou lèverait une erreur si appelée par erreur.
-    throw new BadRequestException('Le paiement manuel n\'est pas supporté par le fournisseur Stripe.');
+    throw new BadRequestException(
+      "Le paiement manuel n'est pas supporté par le fournisseur Stripe.",
+    );
   }
 }

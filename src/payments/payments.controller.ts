@@ -1,5 +1,13 @@
 // src/payments/payments.controller.ts
-import { Body, Controller, Param, Post, UseGuards, Request, Headers } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Post,
+  UseGuards,
+  Request,
+  Headers,
+} from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
@@ -8,14 +16,20 @@ import { OrdersService } from 'src/orders/orders.service'; // Pour l'initiation 
 
 // DTO simple pour la méthode de paiement
 class InitiatePaymentDto {
-  @ApiProperty({ enum: PaymentMethodEnum, description: 'La méthode de paiement à utiliser' })
+  @ApiProperty({
+    enum: PaymentMethodEnum,
+    description: 'La méthode de paiement à utiliser',
+  })
   @IsEnum(PaymentMethodEnum)
   method: PaymentMethodEnum;
 }
 
 // DTO pour le remboursement
 class RefundOrderDto {
-  @ApiPropertyOptional({ description: 'Montant à rembourser (laisser vide pour un remboursement complet)' })
+  @ApiPropertyOptional({
+    description:
+      'Montant à rembourser (laisser vide pour un remboursement complet)',
+  })
   @IsNumber()
   @IsOptional()
   amount?: number;
@@ -43,7 +57,9 @@ export class PaymentsController {
   }
 
   @Post('payments/:provider/webhook')
-  @ApiOperation({ summary: 'Endpoint public pour les webhooks des fournisseurs de paiement' })
+  @ApiOperation({
+    summary: 'Endpoint public pour les webhooks des fournisseurs de paiement',
+  })
   // Ne pas utiliser JwtAuthGuard ici, les webhooks ont leur propre mécanisme de sécurité (signature)
   async handleWebhook(
     @Param('provider') provider: string,
@@ -54,19 +70,30 @@ export class PaymentsController {
     if (!providerEnum) {
       throw new BadRequestException('Fournisseur de paiement non reconnu.');
     }
-    return this.paymentsService.processWebhook(providerEnum, payload, stripeSignature);
+    return this.paymentsService.processWebhook(
+      providerEnum,
+      payload,
+      stripeSignature,
+    );
   }
 
   @Post('orders/:orderId/confirm-manual-payment')
   @UseGuards(JwtAuthGuard) // Doit être protégé par un Admin/OwnerGuard en production
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Confirmer manuellement un paiement pour une commande (Admin/Owner requis)' })
+  @ApiOperation({
+    summary:
+      'Confirmer manuellement un paiement pour une commande (Admin/Owner requis)',
+  })
   async confirmManualPayment(
     @Param('orderId') orderId: string,
     @Request() req,
     @Body() details: any, // Détails du paiement manuel
   ) {
-    return this.paymentsService.confirmManualPayment(orderId, req.user, details);
+    return this.paymentsService.confirmManualPayment(
+      orderId,
+      req.user,
+      details,
+    );
   }
 
   @Post('orders/:orderId/refund')

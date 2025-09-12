@@ -1,10 +1,16 @@
 // src/payments/interfaces/payment-provider.interface.ts
-import { Order, PaymentTransaction, PaymentMethodEnum, PaymentStatus, User } from '@prisma/client';
+import {
+  Order,
+  PaymentTransaction,
+  PaymentMethodEnum,
+  PaymentStatus,
+  User,
+} from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
 
 export interface PaymentIntentResult {
   clientSecret?: string; // Pour les paiements via formulaire Stripe
-  redirectUrl?: string;  // Pour les paiements avec redirection (ex: Mvola ou certaines banques)
+  redirectUrl?: string; // Pour les paiements avec redirection (ex: Mvola ou certaines banques)
   transactionId: string; // L'ID du paiement côté fournisseur (ex: pi_xxx pour Stripe)
   status: PaymentStatus; // Statut initial de la transaction
   // Toute autre info nécessaire au frontend pour afficher le paiement
