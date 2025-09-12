@@ -15,6 +15,7 @@ import {
   PaymentMethodEnum,
   PaymentStatus,
   PrismaClient,
+  PaymentTransaction,
   User,
 } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
@@ -29,7 +30,7 @@ export class StripeProvider implements PaymentProvider {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('STRIPE_API_KEY');
-    this.webhookSecret = this.configService.get<string>(
+    this.webhookSecret = this.configService.getOrThrow<string>(
       'STRIPE_WEBHOOK_SECRET',
     );
 
@@ -44,12 +45,12 @@ export class StripeProvider implements PaymentProvider {
     }
 
     this.stripe = new Stripe(apiKey, {
-      apiVersion: '2024-06-20', // Utiliser la dernière version stable de l'API Stripe
+      apiVersion: '2025-07-30.basil', // Utiliser la dernière version stable de l'API Stripe
     });
   }
 
   async createPaymentIntent(
-    order: Order,
+    order: any,
     user: User,
     tx: PrismaClient,
     metadata?: any,
@@ -77,7 +78,7 @@ export class StripeProvider implements PaymentProvider {
 
       // Le statut initial de notre transaction est PENDING
       return {
-        clientSecret: paymentIntent.client_secret,
+        clientSecret: paymentIntent.client_secret!,
         transactionId: paymentIntent.id,
         status: PaymentStatus.PENDING,
       };
@@ -202,7 +203,7 @@ export class StripeProvider implements PaymentProvider {
     }
   }
 
-  async confirmManualPayment(
+  confirmManualPayment(
     order: Order,
     user: User,
     tx: PrismaClient,

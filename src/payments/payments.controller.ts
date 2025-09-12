@@ -7,12 +7,20 @@ import {
   UseGuards,
   Request,
   Headers,
+  BadRequestException,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { PaymentMethodEnum } from '@prisma/client';
 import { OrdersService } from 'src/orders/orders.service'; // Pour l'initiation du paiement
+import { IsEnum, IsNumber, IsOptional } from 'class-validator';
 
 // DTO simple pour la méthode de paiement
 class InitiatePaymentDto {

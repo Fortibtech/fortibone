@@ -14,5 +14,6 @@ import { PaymentsModule } from 'src/payments/payments.module';
   ], // AJOUTER InventoryModule
   controllers: [OrdersController],
   providers: [OrdersService],
+  exports: [OrdersService],
 })
 export class OrdersModule {}

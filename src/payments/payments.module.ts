@@ -9,6 +9,8 @@ import { PaymentsService } from './payments.service';
 import { MvolaProvider } from './providers/mvola.provider';
 import { HttpModule, HttpService } from '@nestjs/axios'; // Assurez-vous que HttpModule est importé
 import { StripeProvider } from './providers/stripe.provider';
+import { PaymentMethodEnum } from '@prisma/client';
+import { OrdersService } from 'src/orders/orders.service';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
@@ -25,7 +27,7 @@ const paymentProviders: Provider[] = [
   ],
   providers: [
     PaymentsService,
-    ...paymentProviders,
+    ...(paymentProviders as any),
     {
       provide: 'PAYMENT_PROVIDERS_MAP',
       useFactory: (
@@ -44,7 +46,7 @@ const paymentProviders: Provider[] = [
         });
         return providerMap;
       },
-      inject: [ConfigService, HttpService, ...paymentProviders],
+      inject: [ConfigService, HttpService, OrdersService, ...paymentProviders],
     },
   ],
   controllers: [PaymentsController],

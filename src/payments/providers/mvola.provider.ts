@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import {
@@ -15,6 +16,7 @@ import {
   Order,
   PaymentMethodEnum,
   PaymentStatus,
+  PaymentTransaction,
   PrismaClient,
   User,
 } from '@prisma/client';
@@ -43,16 +45,23 @@ export class MvolaProvider implements PaymentProvider {
     private readonly httpService: HttpService,
   ) {
     this.apiBaseTransactionUrl =
-      this.configService.get<string>('MVOLA_API_BASE_URL'); // Ceci est l'URL déjà complète
-    this.authUrl = this.configService.get<string>('MVOLA_AUTH_URL');
-    this.clientId = this.configService.get<string>('MVOLA_CLIENT_ID');
-    this.clientSecret = this.configService.get<string>('MVOLA_CLIENT_SECRET');
-    this.merchantMsisdn = this.configService.get<string>(
+      this.configService.getOrThrow<string>('MVOLA_API_BASE_URL'); // Ceci est l'URL déjà complète
+    this.authUrl = this.configService.getOrThrow<string>('MVOLA_AUTH_URL');
+    this.clientId = this.configService.getOrThrow<string>('MVOLA_CLIENT_ID');
+    this.clientSecret = this.configService.getOrThrow<string>(
+      'MVOLA_CLIENT_SECRET',
+    );
+    this.merchantMsisdn = this.configService.getOrThrow<string>(
       'MVOLA_MERCHANT_MSISDN',
     );
-    this.merchantName = this.configService.get<string>('MVOLA_MERCHANT_NAME');
-    this.callbackUrl = this.configService.get<string>('MVOLA_CALLBACK_URL');
-    this.webhookSecret = this.configService.get<string>('MVOLA_WEBHOOK_SECRET');
+    this.merchantName = this.configService.getOrThrow<string>(
+      'MVOLA_MERCHANT_NAME',
+    );
+    this.callbackUrl =
+      this.configService.getOrThrow<string>('MVOLA_CALLBACK_URL');
+    this.webhookSecret = this.configService.getOrThrow<string>(
+      'MVOLA_WEBHOOK_SECRET',
+    );
 
     if (
       !this.apiBaseTransactionUrl ||
@@ -92,9 +101,9 @@ export class MvolaProvider implements PaymentProvider {
         )
         .toPromise(); // Convertir l'Observable en Promise
 
-      this.accessToken = response.data.access_token;
+      this.accessToken = response?.data.access_token;
       this.tokenExpiresAt = new Date(
-        Date.now() + response.data.expires_in * 1000,
+        Date.now() + response?.data.expires_in * 1000,
       ); // expires_in est en secondes
       return this.accessToken;
     } catch (error) {
@@ -172,8 +181,8 @@ export class MvolaProvider implements PaymentProvider {
         .toPromise();
 
       // Analyser la réponse Mvola (Response Success, page 4 de la doc)
-      const mvolaTransactionStatus = response.data.status; // "pending"
-      const mvolaServerCorrelationId = response.data.serverCorrelationId; // L'ID de Mvola pour cette transaction
+      const mvolaTransactionStatus = response?.data.status; // "pending"
+      const mvolaServerCorrelationId = response?.data.serverCorrelationId; // L'ID de Mvola pour cette transaction
 
       let status: PaymentStatus;
       switch (mvolaTransactionStatus) {
@@ -274,7 +283,7 @@ export class MvolaProvider implements PaymentProvider {
   }
 
   async refundPayment(
-    order: Order,
+    order: any,
     user: User, // L'utilisateur qui initie le remboursement
     amount?: number, // Montant à rembourser (partiel)
     tx?: PrismaClient, // Transaction Prisma (si utilisée)
@@ -322,8 +331,8 @@ export class MvolaProvider implements PaymentProvider {
         .toPromise();
 
       // Analyser la réponse (SIMULATION)
-      const mvolaRefundServerCorrelationId = response.data.serverCorrelationId;
-      const mvolaRefundStatus = response.data.status; // 'pending', 'completed', 'failed'
+      const mvolaRefundServerCorrelationId = response?.data.serverCorrelationId;
+      const mvolaRefundStatus = response?.data.status; // 'pending', 'completed', 'failed'
 
       return {
         transactionId: mvolaRefundServerCorrelationId,
