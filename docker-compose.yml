@@ -38,6 +38,7 @@ services:
       - MVOLA_MERCHANT_NAME=${MVOLA_MERCHANT_NAME}
       - MVOLA_CALLBACK_URL=${MVOLA_CALLBACK_URL}
       - MVOLA_WEBHOOK_SECRET=${MVOLA_WEBHOOK_SECRET}
+      - MVOLA_AUTH_URL=${MVOLA_AUTH_URL}
     depends_on:
       db: # S'assure que la base de données démarre avant l'API
         condition: service_healthy # Attend que le healthcheck de 'db' passe
