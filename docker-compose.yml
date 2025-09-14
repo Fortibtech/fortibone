@@ -30,6 +30,14 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM}
+      - APP_BASE_URL=${APP_BASE_URL}
+      - MVOLA_API_BASE_URL=${MVOLA_API_BASE_URL}
+      - MVOLA_CLIENT_ID=${MVOLA_CLIENT_ID}
+      - MVOLA_CLIENT_SECRET=${MVOLA_CLIENT_SECRET}
+      - MVOLA_MERCHANT_MSISDN=${MVOLA_MERCHANT_MSISDN}
+      - MVOLA_MERCHANT_NAME=${MVOLA_MERCHANT_NAME}
+      - MVOLA_CALLBACK_URL=${MVOLA_CALLBACK_URL}
+      - MVOLA_WEBHOOK_SECRET=${MVOLA_WEBHOOK_SECRET}
     depends_on:
       db: # S'assure que la base de données démarre avant l'API
         condition: service_healthy # Attend que le healthcheck de 'db' passe
