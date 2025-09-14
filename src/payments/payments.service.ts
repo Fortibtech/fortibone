@@ -24,6 +24,7 @@ import {
   RefundResult,
 } from './interfaces/payment-provider.interface';
 import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin du service des commandes
+import { QueryTransactionsDto } from './dto/query-transactions.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -266,5 +267,166 @@ export class PaymentsService {
         refundResult.transactionId,
       );
     });
+  }
+
+  // --- NOUVELLE FONCTION POUR L'HISTORIQUE DES TRANSACTIONS CLIENT ---
+  async findTransactionsForUser(userId: string, dto: QueryTransactionsDto) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      method,
+      status,
+      orderId,
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+    } = dto;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PaymentTransactionWhereInput = {
+      order: {
+        customerId: userId, // Filtrer par l'ID du client de la commande
+      },
+      provider: method,
+      status,
+      orderId,
+    };
+
+    if (search) {
+      where.OR = [
+        { providerTransactionId: { contains: search, mode: 'insensitive' } },
+        { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        // On pourrait chercher dans les métadonnées aussi si elles sont indexées
+      ];
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      where.amount = {};
+      if (minAmount !== undefined)
+        where.amount.gte = new Prisma.Decimal(minAmount);
+      if (maxAmount !== undefined)
+        where.amount.lte = new Prisma.Decimal(maxAmount);
+    }
+
+    const [transactions, total] = await this.prisma.$transaction([
+      this.prisma.paymentTransaction.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              type: true,
+              business: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.paymentTransaction.count({ where }),
+    ]);
+
+    return {
+      data: transactions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // --- NOUVELLE FONCTION POUR L'HISTORIQUE DES TRANSACTIONS D'UNE ENTREPRISE ---
+  async findTransactionsForBusiness(
+    businessId: string,
+    userId: string,
+    dto: QueryTransactionsDto,
+  ) {
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+    });
+    if (!business || business.ownerId !== userId) {
+      // Vérification d'autorisation
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à consulter les transactions de cette entreprise.",
+      );
+    }
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      method,
+      status,
+      orderId,
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+    } = dto;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PaymentTransactionWhereInput = {
+      order: {
+        businessId: businessId, // Filtrer par l'ID de l'entreprise recevant le paiement
+      },
+      provider: method,
+      status,
+      orderId,
+    };
+
+    if (search) {
+      where.OR = [
+        { providerTransactionId: { contains: search, mode: 'insensitive' } },
+        { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      where.amount = {};
+      if (minAmount !== undefined)
+        where.amount.gte = new Prisma.Decimal(minAmount);
+      if (maxAmount !== undefined)
+        where.amount.lte = new Prisma.Decimal(maxAmount);
+    }
+
+    const [transactions, total] = await this.prisma.$transaction([
+      this.prisma.paymentTransaction.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              type: true,
+              customer: { select: { id: true, firstName: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.paymentTransaction.count({ where }),
+    ]);
+
+    return {
+      data: transactions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

@@ -16,7 +16,7 @@ jobs:
         with:
           host: 212.132.99.71
           username: root
-          password: lN2mExJY
+          password: fortibtech
           source: "*"
           target: /var/www/fortibone-backend/
       - name: Install sshpass
@@ -30,7 +30,7 @@ jobs:
         run: |
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..." 
 
-          sshpass -p "lN2mExJY" ssh -o StrictHostKeyChecking=no root@212.132.99.71 << 'EOF'
+          sshpass -p "fortibtech" ssh -o StrictHostKeyChecking=no root@212.132.99.71 << 'EOF'
             echo "Connected to VPS. Current directory: $(pwd)"
             
             cd /var/www/fortibone-backend/

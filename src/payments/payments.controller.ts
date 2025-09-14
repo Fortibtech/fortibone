@@ -1,4 +1,4 @@
-// src/payments/payments.controller.ts
+// src/payments.controller.ts
 import {
   Body,
   Controller,
@@ -8,61 +8,33 @@ import {
   Request,
   Headers,
   BadRequestException,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Assurez-vous du bon chemin
-import { PaymentMethodEnum, User } from '@prisma/client';
+import { PaymentMethodEnum, PaymentStatus, User } from '@prisma/client';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ConfirmManualPaymentDto } from './dto/confirm-manual-payment.dto';
 import { RefundOrderDto } from './dto/refund-order.dto';
+import { QueryTransactionsDto } from './dto/query-transactions.dto';
 
 @ApiTags('Payments')
-@Controller() // Le contrôleur est maintenant préfixé par ses méthodes pour plus de flexibilité
+@Controller('payments') // Le contrôleur est maintenant préfixé par ses méthodes pour plus de flexibilité
 export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     // Nous n'avons plus besoin d'OrdersService directement ici car PaymentsService gère l'orchestration
   ) {}
 
-  @Post('orders/:orderId/pay')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Initier un paiement pour une commande',
-    description:
-      "Crée une intention de paiement avec le fournisseur spécifié. Pour Stripe, si un `paymentMethodId` est fourni dans `metadata`, la transaction tentera d'être confirmée automatiquement.",
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Intention de paiement créée avec succès.',
-  })
-  @ApiResponse({
-    status: 400,
-    description:
-      'Commande non trouvée ou non éligible au paiement, ou méthode non configurée.',
-  })
-  @ApiResponse({ status: 401, description: 'Non autorisé.' })
-  @ApiResponse({ status: 403, description: 'Forbidden.' })
-  async initiatePayment(
-    @Param('orderId') orderId: string,
-    @Request() req: { user: User },
-    @Body() dto: InitiatePaymentDto,
-  ) {
-    return this.paymentsService.createPayment(
-      orderId,
-      req.user,
-      dto.method,
-      dto.metadata,
-    );
-  }
-
-  @Post('payments/:provider/webhook')
+  @Post('/webhook/:provider')
   @ApiOperation({
     summary: 'Endpoint public pour les webhooks des fournisseurs de paiement',
     description:
@@ -95,6 +67,38 @@ export class PaymentsController {
     // Le service se chargera de récupérer la bonne signature dans l'objet 'headers'
     // et de vérifier la validité du payload.
     return this.paymentsService.processWebhook(providerEnum, rawBody, headers);
+  }
+
+  @Post('orders/:orderId/pay')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Initier un paiement pour une commande',
+    description:
+      "Crée une intention de paiement avec le fournisseur spécifié. Pour Stripe, si un `paymentMethodId` est fourni dans `metadata`, la transaction tentera d'être confirmée automatiquement.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Intention de paiement créée avec succès.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Commande non trouvée ou non éligible au paiement, ou méthode non configurée.',
+  })
+  @ApiResponse({ status: 401, description: 'Non autorisé.' })
+  @ApiResponse({ status: 403, description: 'Forbidden.' })
+  async initiatePayment(
+    @Param('orderId') orderId: string,
+    @Request() req: { user: User },
+    @Body() dto: InitiatePaymentDto,
+  ) {
+    return this.paymentsService.createPayment(
+      orderId,
+      req.user,
+      dto.method,
+      dto.metadata,
+    );
   }
 
   @Post('orders/:orderId/confirm-manual-payment')
@@ -150,5 +154,64 @@ export class PaymentsController {
     @Body() dto: RefundOrderDto,
   ) {
     return this.paymentsService.refundOrder(orderId, req.user, dto.amount);
+  }
+
+  @Get('my-transactions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Lister l'historique de toutes les transactions de paiement de l'utilisateur connecté (avec filtres et pagination)",
+    description:
+      'Permet à un client de voir toutes les tentatives de paiement associées à ses commandes.',
+  })
+  // Ajoutez les @ApiQuery pour tous les champs du QueryTransactionsDto
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'method', required: false, enum: PaymentMethodEnum })
+  @ApiQuery({ name: 'status', required: false, enum: PaymentStatus })
+  @ApiQuery({ name: 'orderId', required: false, type: String })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  @ApiQuery({ name: 'minAmount', required: false, type: Number })
+  @ApiQuery({ name: 'maxAmount', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async findMyTransactions(
+    @Request() req: { user: User },
+    @Query() dto: QueryTransactionsDto,
+  ) {
+    return this.paymentsService.findTransactionsForUser(req.user.id, dto);
+  }
+
+  @Get('businesses/:businessId/transactions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Lister l'historique des transactions de paiement pour une entreprise (Owner requis, avec filtres et pagination)",
+    description:
+      "Permet à un propriétaire d'entreprise de voir toutes les transactions de paiement traitées pour son entreprise.",
+  })
+  // Ajoutez les @ApiQuery pour tous les champs du QueryTransactionsDto
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'method', required: false, enum: PaymentMethodEnum })
+  @ApiQuery({ name: 'status', required: false, enum: PaymentStatus })
+  @ApiQuery({ name: 'orderId', required: false, type: String })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  @ApiQuery({ name: 'minAmount', required: false, type: Number })
+  @ApiQuery({ name: 'maxAmount', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async findBusinessTransactions(
+    @Param('businessId') businessId: string,
+    @Request() req: { user: User },
+    @Query() dto: QueryTransactionsDto,
+  ) {
+    return this.paymentsService.findTransactionsForBusiness(
+      businessId,
+      req.user.id,
+      dto,
+    );
   }
 }
