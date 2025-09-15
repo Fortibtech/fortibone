@@ -1,4 +1,4 @@
-// src/orders/orders.controller.ts
+// src/orders.controller.ts
 import {
   Controller,
   Post,
@@ -39,7 +39,7 @@ export class OrdersController {
     return this.ordersService.create(createOrderDto, req.user);
   }
 
-  @Get('orders/my-orders')
+  @Get('my-orders')
   @ApiOperation({
     summary:
       "Lister toutes les commandes passées par l'utilisateur connecté (avec filtres et pagination)",
@@ -117,14 +117,14 @@ export class OrdersController {
     return this.ordersService.findForBusiness(businessId, req.user.id, dto);
   }
 
-  @Get('orders/:id')
+  @Get(':id')
   @ApiOperation({ summary: "Obtenir les détails d'une commande par son ID" })
   // TODO: Ajouter une logique de sécurité pour vérifier que l'utilisateur a le droit de voir cette commande (client, owner, member)
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
   }
 
-  @Patch('orders/:id')
+  @Patch(':id')
   @ApiOperation({
     summary:
       "Mettre à jour les informations non-statutaires d'une commande (Owner requis)",
@@ -139,7 +139,7 @@ export class OrdersController {
     return this.ordersService.updateOrder(id, req.user.id, dto);
   }
 
-  @Patch('orders/:id/status')
+  @Patch(':id/status')
   @ApiOperation({
     summary: "Mettre à jour le statut d'une commande (Owner requis)",
   })
