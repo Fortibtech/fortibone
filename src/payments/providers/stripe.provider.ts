@@ -44,9 +44,7 @@ export class StripeProvider implements PaymentProvider {
       );
     }
 
-    this.stripe = new Stripe(apiKey, {
-      apiVersion: '2025-07-30.basil', // Utiliser la dernière version stable de l'API Stripe
-    });
+    this.stripe = new Stripe(apiKey);
   }
 
   async createPaymentIntent(
