@@ -33,6 +33,8 @@ import {
   PopularDishItem,
   ReservationsByPeriodItem,
 } from './dto/src/analytics/dto/restaurant-details.dto';
+import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
+import { MemberOverviewDto } from './dto/member-overview.dto';
 
 @Injectable()
 export class AnalyticsService {
@@ -718,6 +720,181 @@ export class AnalyticsService {
       popularDishes,
       reservationsByPeriod,
       averageTableOccupancy,
+    };
+  }
+
+  // --- MÉTHODE MODIFIÉE POUR LES STATISTIQUES DES MEMBRES ---
+  async getMemberOverview(
+    businessId: string, // Ajout de l'ID de l'entreprise
+    memberId: string, // L'ID du membre dont on veut voir les stats
+    requestingUserId: string, // L'ID de la personne qui fait la demande
+    queryDto: QueryMemberOverviewDto,
+  ): Promise<MemberOverviewDto> {
+    // 1. Vérification de l'existence de l'entreprise
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { ownerId: true },
+    });
+    if (!business) {
+      throw new NotFoundException('Entreprise non trouvée.');
+    }
+
+    // 2. Vérification de l'existence du membre
+    const member = await this.prisma.user.findUnique({
+      where: { id: memberId },
+      select: { id: true, firstName: true, lastName: true }, // Pour confirmation
+    });
+    if (!member) {
+      throw new NotFoundException('Membre non trouvé.');
+    }
+
+    // 3. Vérification de l'autorisation :
+    //    a) Le demandeur est le membre lui-même, OU
+    //    b) Le demandeur est le propriétaire de l'entreprise, OU
+    //    c) Le demandeur est un ADMIN de l'entreprise.
+    const isSelf = memberId === requestingUserId;
+    const isOwner = business.ownerId === requestingUserId;
+    const isAdminOfBusiness = await this.prisma.businessMember.findUnique({
+      where: {
+        userId_businessId: { userId: requestingUserId, businessId: businessId },
+        role: 'ADMIN',
+      },
+    });
+
+    if (!isSelf && !isOwner && !isAdminOfBusiness) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à consulter les statistiques de ce membre.",
+      );
+    }
+
+    // Le reste de la logique utilise maintenant 'memberId' comme 'employeeId'
+    const { startDate, endDate } = queryDto;
+
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (startDate) dateFilter.gte = new Date(startDate);
+    if (endDate) dateFilter.lte = new Date(endDate);
+
+    const rawDateFilter: string[] = [];
+    if (startDate)
+      rawDateFilter.push(
+        `"createdAt" >= '${new Date(startDate).toISOString()}'`,
+      );
+    if (endDate)
+      rawDateFilter.push(`"createdAt" <= '${new Date(endDate).toISOString()}'`);
+    const rawDateWhereClause =
+      rawDateFilter.length > 0 ? `AND ${rawDateFilter.join(' AND ')}` : '';
+
+    const [
+      salesProcessedAggregates,
+      productsSoldAggregates,
+      purchaseInitiatedAggregates,
+      reservationsManagedAggregates,
+      inventoryAdjustmentsCount,
+      totalLossesManagedRaw,
+    ] = await this.prisma.$transaction([
+      // 1. Ventes traitées (où le membre est l'employé associé à la commande)
+      this.prisma.order.aggregate({
+        where: {
+          businessId, // Filtrer sur l'entreprise du membre
+          employeeId: memberId, // Stats pour CE membre
+          type: OrderType.SALE,
+          status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] },
+          createdAt: dateFilter,
+        },
+        _sum: { totalAmount: true },
+        _count: { id: true },
+      }),
+
+      // 2. Produits vendus par ce membre (via OrderLine où le membre est l'employé)
+      this.prisma.orderLine.aggregate({
+        where: {
+          order: {
+            businessId,
+            employeeId: memberId, // Stats pour CE membre
+            type: OrderType.SALE,
+            status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] },
+            createdAt: dateFilter,
+          },
+        },
+        _sum: { quantity: true },
+      }),
+
+      // 3. Commandes d'achat initiées par ce membre
+      this.prisma.order.aggregate({
+        where: {
+          purchasingBusinessId: businessId, // L'entreprise ACHÈTE (pour filtrer les achats liés à cette entreprise)
+          employeeId: memberId, // Stats pour CE membre
+          type: OrderType.PURCHASE,
+          status: {
+            in: [
+              OrderStatus.DELIVERED,
+              OrderStatus.COMPLETED,
+              OrderStatus.SHIPPED,
+            ],
+          },
+          createdAt: dateFilter,
+        },
+        _sum: { totalAmount: true },
+        _count: { id: true },
+      }),
+
+      // 4. Réservations gérées par ce membre (si c'est un employé de restaurant)
+      this.prisma.order.aggregate({
+        where: {
+          businessId,
+          employeeId: memberId, // Stats pour CE membre
+          type: OrderType.RESERVATION,
+          status: { in: [OrderStatus.CONFIRMED, OrderStatus.COMPLETED] },
+          createdAt: dateFilter,
+        },
+        _count: { id: true },
+      }),
+
+      // 5. Ajustements d'inventaire effectués par ce membre
+      this.prisma.stockMovement.count({
+        where: {
+          businessId,
+          performedById: memberId, // Stats pour CE membre
+          type: MovementType.ADJUSTMENT,
+          createdAt: dateFilter,
+        },
+      }),
+
+      // 6. Valeur totale des pertes (LOSS, EXPIRATION) gérées par ce membre (requête RAW)
+      this.prisma.$queryRaw<{ totalLosses: number }[]>`
+        SELECT COALESCE(SUM(ABS(sm.quantity_change) * pv.purchase_price), 0) as "totalLosses"
+        FROM "StockMovement" sm
+        JOIN "ProductVariant" pv ON sm."variantId" = pv.id
+        JOIN "Product" p ON pv."product_id" = p.id
+        WHERE p."businessId" = ${businessId}
+          AND sm."performedById" = ${memberId} -- Stats pour CE membre
+          AND sm.type IN (${MovementType.LOSS}::"MovementType", ${MovementType.EXPIRATION}::"MovementType")
+          ${Prisma.sql`${rawDateWhereClause}`}
+      `,
+    ]);
+
+    const totalSalesProcessed =
+      salesProcessedAggregates._sum?.totalAmount?.toNumber() || 0;
+    const totalSalesOrdersProcessed = salesProcessedAggregates._count?.id || 0;
+    const totalProductsSold = productsSoldAggregates._sum?.quantity || 0;
+    const totalPurchaseAmountInitiated =
+      purchaseInitiatedAggregates._sum?.totalAmount?.toNumber() || 0;
+    const totalPurchaseOrdersInitiated =
+      purchaseInitiatedAggregates._count?.id || 0;
+    const totalReservationsManaged =
+      reservationsManagedAggregates._count?.id || 0;
+    const totalInventoryAdjustments = inventoryAdjustmentsCount;
+    const totalLossesManaged = totalLossesManagedRaw[0]?.totalLosses || 0;
+
+    return {
+      totalSalesProcessed,
+      totalSalesOrdersProcessed,
+      totalProductsSold,
+      totalPurchaseAmountInitiated,
+      totalPurchaseOrdersInitiated,
+      totalReservationsManaged,
+      totalInventoryAdjustments,
+      totalLossesManaged,
     };
   }
 }
