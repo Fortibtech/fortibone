@@ -25,6 +25,10 @@ import { InventoryDetailsDto } from './dto/inventory-details.dto';
 import { QueryInventoryDto } from './dto/query-inventory.dto';
 import { CustomerDetailsDto } from './dto/customer-details.dto';
 import { QueryCustomersDto } from './dto/query-customers.dto';
+import { QueryRestaurantDto } from './dto/query-restaurant.dto';
+import { RestaurantDetailsDto } from './dto/src/analytics/dto/restaurant-details.dto';
+import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
+import { MemberOverviewDto } from './dto/member-overview.dto';
 
 @ApiTags('Analytics')
 @Controller('businesses/:businessId/analytics')
@@ -218,6 +222,95 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getCustomerDetails(
       businessId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  @Get('restaurant')
+  @ApiOperation({
+    summary: 'Obtenir les statistiques spécifiques aux restaurants',
+    description:
+      "Nécessite des privilèges de propriétaire ou d'administrateur de l'entreprise. Cet endpoint est uniquement pour les entreprises de type RESTAURATEUR.",
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'unit',
+    enum: SalesPeriodUnit,
+    required: false,
+    description: 'Unité de regroupement pour les réservations par période',
+  })
+  @ApiResponse({
+    status: 200,
+    type: RestaurantDetailsDto,
+    description: 'Statistiques détaillées pour un restaurant.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: "L'entreprise n'est pas un restaurant.",
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise non trouvée.' })
+  getRestaurantDetails(
+    @Param('businessId') businessId: string,
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryRestaurantDto,
+  ) {
+    return this.analyticsService.getRestaurantDetails(
+      businessId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  // --- NOUVEL ENDPOINT POUR LES STATISTIQUES DES MEMBRES ---
+  @Get('members/:memberId/overview') // Route modifiée pour inclure memberId
+  @ApiOperation({
+    summary:
+      "Obtenir les statistiques d'aperçu pour un membre spécifique de l'entreprise",
+    description:
+      "Nécessite que l'utilisateur connecté soit le membre lui-même, le propriétaire de l'entreprise, ou un administrateur de l'entreprise.",
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début de la période (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin de la période (YYYY-MM-DD)',
+  })
+  @ApiResponse({
+    status: 200,
+    type: MemberOverviewDto,
+    description: "Statistiques d'aperçu du membre.",
+  })
+  @ApiResponse({ status: 401, description: 'Non autorisé.' })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise ou membre non trouvé.' })
+  getMemberOverview(
+    @Param('businessId') businessId: string,
+    @Param('memberId') memberId: string, // Récupérer l'ID du membre de l'URL
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryMemberOverviewDto,
+  ) {
+    return this.analyticsService.getMemberOverview(
+      businessId,
+      memberId,
       req.user.id,
       queryDto,
     );
