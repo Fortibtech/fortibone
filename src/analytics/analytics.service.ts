@@ -1,11 +1,18 @@
 // src/analytics/analytics.service.ts
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MovementType, OrderStatus, OrderType, Prisma } from '@prisma/client';
+import {
+  BusinessType,
+  MovementType,
+  OrderStatus,
+  OrderType,
+  Prisma,
+} from '@prisma/client';
 import { QueryOverviewDto } from './dto/query-overview.dto'; // Importer le nouveau DTO
 import { QuerySalesDto, SalesPeriodUnit } from './dto/query-sales.dto';
 import {
@@ -20,6 +27,12 @@ import {
   TopCustomerItem,
 } from './dto/customer-details.dto';
 import { QueryCustomersDto } from './dto/query-customers.dto';
+import { QueryRestaurantDto } from './dto/query-restaurant.dto';
+import {
+  RestaurantDetailsDto,
+  PopularDishItem,
+  ReservationsByPeriodItem,
+} from './dto/src/analytics/dto/restaurant-details.dto';
 
 @Injectable()
 export class AnalyticsService {
@@ -29,7 +42,7 @@ export class AnalyticsService {
   private async verifyBusinessOwnership(businessId: string, userId: string) {
     const business = await this.prisma.business.findUnique({
       where: { id: businessId },
-      select: { ownerId: true, name: true },
+      select: { ownerId: true, name: true, type: true },
     });
 
     if (!business) {
@@ -576,6 +589,135 @@ export class AnalyticsService {
       page,
       limit,
       totalPages: Math.ceil(totalCustomers / limit),
+    };
+  }
+
+  // --- NOUVELLE MÉTHODE POUR LES STATISTIQUES DE RESTAURANT ---
+  async getRestaurantDetails(
+    businessId: string,
+    userId: string,
+    queryDto: QueryRestaurantDto,
+  ): Promise<RestaurantDetailsDto> {
+    const business = await this.verifyBusinessOwnership(businessId, userId);
+
+    if (business.type !== BusinessType.RESTAURATEUR) {
+      throw new BadRequestException(
+        'Cet endpoint est uniquement pour les entreprises de type RESTAURATEUR.',
+      );
+    }
+
+    const { startDate, endDate, unit = SalesPeriodUnit.MONTH } = queryDto; // unité par défaut pour les réservations
+
+    const dateFilterConditions: string[] = [];
+    if (startDate)
+      dateFilterConditions.push(
+        `o."createdAt" >= '${new Date(startDate).toISOString()}'`,
+      );
+    if (endDate)
+      dateFilterConditions.push(
+        `o."createdAt" <= '${new Date(endDate).toISOString()}'`,
+      );
+    const dateWhereClause =
+      dateFilterConditions.length > 0
+        ? `AND ${dateFilterConditions.join(' AND ')}`
+        : '';
+
+    const [
+      totalReservationsResult,
+      totalDishOrdersResult,
+      popularDishesRaw,
+      reservationsByPeriodRaw,
+    ] = await this.prisma.$transaction([
+      // 1. Nombre total de réservations
+      this.prisma.order.count({
+        where: {
+          businessId,
+          type: OrderType.RESERVATION,
+          status: { in: [OrderStatus.CONFIRMED, OrderStatus.COMPLETED] },
+          createdAt: {
+            gte: startDate ? new Date(startDate) : undefined,
+            lte: endDate ? new Date(endDate) : undefined,
+          },
+        },
+      }),
+
+      // 2. Nombre total de commandes de plats (ventes B2C vers le restaurant)
+      this.prisma.order.count({
+        where: {
+          businessId,
+          type: OrderType.SALE, // Les plats sont vendus
+          status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] },
+          createdAt: {
+            gte: startDate ? new Date(startDate) : undefined,
+            lte: endDate ? new Date(endDate) : undefined,
+          },
+        },
+      }),
+
+      // 3. Plats les plus populaires (basé sur les quantités vendues ou réservées)
+      this.prisma.$queryRaw<PopularDishItem[]>`
+        SELECT
+          pv.id as "variantId",
+          p.name as "dishName",
+          pv."imageUrl" as "dishImageUrl",
+          COALESCE(SUM(ol.quantity), 0) as "totalQuantityOrdered",
+          COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue"
+        FROM "OrderLine" ol
+        JOIN "Order" o ON ol."orderId" = o.id
+        JOIN "ProductVariant" pv ON ol."variantId" = pv.id
+        JOIN "Product" p ON pv."product_id" = p.id
+        WHERE o."businessId" = ${businessId}
+          AND o.type IN (${OrderType.SALE}::"OrderType", ${OrderType.RESERVATION}::"OrderType") -- Prend en compte ventes et pré-commandes
+          AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus", ${OrderStatus.CONFIRMED}::"OrderStatus")
+          ${Prisma.sql`${dateWhereClause}`}
+        GROUP BY pv.id, p.name, pv."imageUrl"
+        ORDER BY "totalQuantityOrdered" DESC
+        LIMIT 10
+      `,
+
+      // 4. Réservations agrégées par période
+      this.prisma.$queryRaw<ReservationsByPeriodItem[]>`
+        SELECT
+          ${this.getPeriodFormat(unit)} as period,
+          COUNT(o.id) as "totalReservations"
+        FROM "Order" o
+        WHERE o."businessId" = ${businessId}
+          AND o.type = ${OrderType.RESERVATION}::"OrderType"
+          AND o.status IN (${OrderStatus.CONFIRMED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
+          ${Prisma.sql`${dateWhereClause}`}
+        GROUP BY period
+        ORDER BY period ASC
+      `,
+    ]);
+
+    const totalReservations = totalReservationsResult;
+    const totalDishOrders = totalDishOrdersResult;
+
+    const popularDishes: PopularDishItem[] = popularDishesRaw.map((item) => ({
+      variantId: item.variantId,
+      dishName: item.dishName,
+      dishImageUrl: item.dishImageUrl,
+      totalQuantityOrdered: Number(item.totalQuantityOrdered),
+      totalRevenue: item.totalRevenue,
+    }));
+
+    const reservationsByPeriod: ReservationsByPeriodItem[] =
+      reservationsByPeriodRaw.map((item) => ({
+        period: item.period,
+        totalReservations: Number(item.totalReservations),
+      }));
+
+    // Calcul de l'occupation moyenne des tables serait plus complexe et nécessiterait
+    // des données sur la capacité des tables et l'historique des réservations plus fines.
+    // Pour l'instant, nous le laissons optionnel ou à 0.
+    const averageTableOccupancy = 0; // Calcul à implémenter si les données sont disponibles
+
+    return {
+      totalReservations,
+      totalDishOrders,
+      popularDishes,
+      reservationsByPeriod,
+      averageTableOccupancy,
     };
   }
 }

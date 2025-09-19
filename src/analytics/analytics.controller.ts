@@ -25,6 +25,8 @@ import { InventoryDetailsDto } from './dto/inventory-details.dto';
 import { QueryInventoryDto } from './dto/query-inventory.dto';
 import { CustomerDetailsDto } from './dto/customer-details.dto';
 import { QueryCustomersDto } from './dto/query-customers.dto';
+import { QueryRestaurantDto } from './dto/query-restaurant.dto';
+import { RestaurantDetailsDto } from './dto/src/analytics/dto/restaurant-details.dto';
 
 @ApiTags('Analytics')
 @Controller('businesses/:businessId/analytics')
@@ -217,6 +219,53 @@ export class AnalyticsController {
     @Query() queryDto: QueryCustomersDto,
   ) {
     return this.analyticsService.getCustomerDetails(
+      businessId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  @Get('restaurant')
+  @ApiOperation({
+    summary: 'Obtenir les statistiques spécifiques aux restaurants',
+    description:
+      "Nécessite des privilèges de propriétaire ou d'administrateur de l'entreprise. Cet endpoint est uniquement pour les entreprises de type RESTAURATEUR.",
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'unit',
+    enum: SalesPeriodUnit,
+    required: false,
+    description: 'Unité de regroupement pour les réservations par période',
+  })
+  @ApiResponse({
+    status: 200,
+    type: RestaurantDetailsDto,
+    description: 'Statistiques détaillées pour un restaurant.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: "L'entreprise n'est pas un restaurant.",
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise non trouvée.' })
+  getRestaurantDetails(
+    @Param('businessId') businessId: string,
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryRestaurantDto,
+  ) {
+    return this.analyticsService.getRestaurantDetails(
       businessId,
       req.user.id,
       queryDto,
