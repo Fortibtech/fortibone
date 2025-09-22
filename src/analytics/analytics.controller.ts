@@ -6,7 +6,7 @@ import {
   UseGuards,
   Request,
   Query,
-} from '@nestjs/common'; // Importer Query
+} from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import {
   ApiBearerAuth,
@@ -14,30 +14,47 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger'; // Importer ApiQuery
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // import { BusinessAdminGuard } from 'src/business/guards/business-admin.guard';
+
+// Importez TOUS les DTOs de requête et de réponse
 import { BusinessOverviewDto } from './dto/business-overview.dto';
-import { QueryOverviewDto } from './dto/query-overview.dto'; // Importer le nouveau DTO
-import { SalesPeriodUnit, QuerySalesDto } from './dto/query-sales.dto';
+import { QueryOverviewDto } from './dto/query-overview.dto';
 import { SalesDetailsDto } from './dto/sales-details.dto';
+import { QuerySalesDto, SalesPeriodUnit } from './dto/query-sales.dto';
 import { InventoryDetailsDto } from './dto/inventory-details.dto';
 import { QueryInventoryDto } from './dto/query-inventory.dto';
 import { CustomerDetailsDto } from './dto/customer-details.dto';
 import { QueryCustomersDto } from './dto/query-customers.dto';
 import { QueryRestaurantDto } from './dto/query-restaurant.dto';
-import { RestaurantDetailsDto } from './dto/src/analytics/dto/restaurant-details.dto';
-import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
 import { MemberOverviewDto } from './dto/member-overview.dto';
+import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
+import { RestaurantDetailsDto } from './dto/restaurant-details.dto';
+import { OrderStatus, OrderType } from '@prisma/client';
+import { QueryOrdersDto } from 'src/orders/dto/query-orders.dto';
+
+// Pour les réponses paginées des listes (exemple pour les commandes du membre)
+// Vous pourriez créer un DTO générique pour les réponses paginées si vous voulez uniformiser.
+// Par exemple:
+// class PaginatedOrderListResponse {
+//   @ApiProperty({type: [Order], description: 'Liste des commandes'})
+//   data: Order[]; // Importer le modèle Order
+//   @ApiProperty({description: 'Nombre total d\'éléments'})
+//   total: number;
+//   // ... autres champs de pagination
+// }
 
 @ApiTags('Analytics')
 @Controller('businesses/:businessId/analytics')
-@UseGuards(JwtAuthGuard /*, BusinessAdminGuard*/)
+@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  // --- STATISTIQUES GÉNÉRALES (OVERVIEW) ---
   @Get('overview')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary:
       "Obtenir les statistiques générales (vue d'ensemble) d'une entreprise sur une période donnée",
@@ -65,17 +82,19 @@ export class AnalyticsController {
   @ApiResponse({ status: 404, description: 'Entreprise non trouvée.' })
   getBusinessOverview(
     @Param('businessId') businessId: string,
-    @Request() req,
-    @Query() queryDto: QueryOverviewDto, // Utiliser le DTO de requête
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryOverviewDto,
   ) {
     return this.analyticsService.getBusinessOverview(
       businessId,
-      (req as { user: { id: string } }).user.id,
+      req.user.id,
       queryDto,
     );
   }
 
+  // --- STATISTIQUES DE VENTES DÉTAILLÉES ---
   @Get('sales')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary:
       "Obtenir les statistiques de ventes détaillées d'une entreprise sur une période",
@@ -119,7 +138,9 @@ export class AnalyticsController {
     );
   }
 
+  // --- STATISTIQUES D'INVENTAIRE ---
   @Get('inventory')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary:
       "Obtenir les statistiques détaillées de l'inventaire d'une entreprise",
@@ -181,7 +202,9 @@ export class AnalyticsController {
     );
   }
 
+  // --- STATISTIQUES CLIENT (TOP CLIENTS) ---
   @Get('customers')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary:
       "Obtenir les statistiques détaillées sur les clients d'une entreprise (Top Clients)",
@@ -227,7 +250,9 @@ export class AnalyticsController {
     );
   }
 
+  // --- STATISTIQUES DE RESTAURANT ---
   @Get('restaurant')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary: 'Obtenir les statistiques spécifiques aux restaurants',
     description:
@@ -274,8 +299,9 @@ export class AnalyticsController {
     );
   }
 
-  // --- NOUVEL ENDPOINT POUR LES STATISTIQUES DES MEMBRES ---
-  @Get('members/:memberId/overview') // Route modifiée pour inclure memberId
+  // --- STATISTIQUES DES MEMBRES (APERÇU) ---
+  @Get('members/:memberId/overview')
+  // @UseGuards(BusinessAdminGuard)
   @ApiOperation({
     summary:
       "Obtenir les statistiques d'aperçu pour un membre spécifique de l'entreprise",
@@ -304,11 +330,159 @@ export class AnalyticsController {
   @ApiResponse({ status: 404, description: 'Entreprise ou membre non trouvé.' })
   getMemberOverview(
     @Param('businessId') businessId: string,
-    @Param('memberId') memberId: string, // Récupérer l'ID du membre de l'URL
+    @Param('memberId') memberId: string,
     @Request() req: { user: { id: string } },
     @Query() queryDto: QueryMemberOverviewDto,
   ) {
     return this.analyticsService.getMemberOverview(
+      businessId,
+      memberId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  // --- STATISTIQUES DÉTAILLÉES DES VENTES DU MEMBRE ---
+  @Get('members/:memberId/sales')
+  // @UseGuards(BusinessAdminGuard)
+  @ApiOperation({
+    summary:
+      'Obtenir les statistiques de ventes détaillées traitées par un membre',
+    description:
+      "Nécessite que l'utilisateur connecté soit le membre lui-même, le propriétaire de l'entreprise, ou un administrateur de l'entreprise.",
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'unit',
+    enum: SalesPeriodUnit,
+    required: false,
+    description: 'Unité de regroupement pour les ventes par période',
+  })
+  @ApiResponse({
+    status: 200,
+    type: SalesDetailsDto,
+    description: 'Statistiques détaillées des ventes du membre.',
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise ou membre non trouvé.' })
+  getMemberSalesDetails(
+    @Param('businessId') businessId: string,
+    @Param('memberId') memberId: string,
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QuerySalesDto,
+  ) {
+    return this.analyticsService.getMemberSalesDetails(
+      businessId,
+      memberId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  // --- MOUVEMENTS D'INVENTAIRE DU MEMBRE ---
+  @Get('members/:memberId/inventory-movements')
+  // @UseGuards(BusinessAdminGuard)
+  @ApiOperation({
+    summary: "Obtenir les mouvements d'inventaire effectués par un membre",
+    description:
+      "Nécessite que l'utilisateur connecté soit le membre lui-même, le propriétaire de l'entreprise, ou un administrateur de l'entreprise.",
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Recherche par raison, nom de produit ou SKU',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin (YYYY-MM-DD)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description:
+      "Liste paginée des mouvements d'inventaire du membre." /* Ajoutez un DTO spécifique si la structure est différente du modèle StockMovement */,
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise ou membre non trouvé.' })
+  getMemberInventoryMovements(
+    @Param('businessId') businessId: string,
+    @Param('memberId') memberId: string,
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryInventoryDto,
+  ) {
+    return this.analyticsService.getMemberInventoryMovements(
+      businessId,
+      memberId,
+      req.user.id,
+      queryDto,
+    );
+  }
+
+  // --- COMMANDES TRAITÉES PAR LE MEMBRE ---
+  @Get('members/:memberId/orders')
+  // @UseGuards(BusinessAdminGuard)
+  @ApiOperation({
+    summary: 'Obtenir les commandes traitées par un membre',
+    description:
+      "Nécessite que l'utilisateur connecté soit le membre lui-même, le propriétaire de l'entreprise, ou un administrateur de l'entreprise.",
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Recherche par numéro de commande, notes, ou client',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
+  @ApiQuery({ name: 'type', required: false, enum: OrderType })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Date de début (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Date de fin (YYYY-MM-DD)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Liste paginée des commandes traitées par le membre.' /* Ajoutez un DTO spécifique si la structure est différente du modèle Order */,
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise ou membre non trouvé.' })
+  getMemberOrders(
+    @Param('businessId') businessId: string,
+    @Param('memberId') memberId: string,
+    @Request() req: { user: { id: string } },
+    @Query() queryDto: QueryOrdersDto,
+  ) {
+    return this.analyticsService.getMemberOrders(
       businessId,
       memberId,
       req.user.id,
