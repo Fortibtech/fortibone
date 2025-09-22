@@ -32,9 +32,10 @@ import {
   RestaurantDetailsDto,
   PopularDishItem,
   ReservationsByPeriodItem,
-} from './dto/src/analytics/dto/restaurant-details.dto';
+} from './dto/restaurant-details.dto';
 import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
 import { MemberOverviewDto } from './dto/member-overview.dto';
+import { QueryOrdersDto } from 'src/orders/dto/query-orders.dto';
 
 @Injectable()
 export class AnalyticsService {
@@ -75,15 +76,21 @@ export class AnalyticsService {
     if (endDate) dateFilter.lte = new Date(endDate);
 
     // Construire la clause de date pour les requêtes RAW (PostgreSQL attend des timestamps)
-    const rawDateFilter: string[] = [];
-    if (startDate)
-      rawDateFilter.push(
-        `"createdAt" >= '${new Date(startDate).toISOString()}'`,
+    // --- CORRECTION ICI : Construire les conditions de date directement avec Prisma.sql ---
+    const rawDateConditions: Prisma.Sql[] = [];
+    if (startDate) {
+      rawDateConditions.push(
+        Prisma.sql`"created_at" >= ${new Date(startDate)}`,
       );
-    if (endDate)
-      rawDateFilter.push(`"createdAt" <= '${new Date(endDate).toISOString()}'`);
-    const rawDateWhereClause =
-      rawDateFilter.length > 0 ? `AND ${rawDateFilter.join(' AND ')}` : '';
+    }
+    if (endDate) {
+      rawDateConditions.push(Prisma.sql`"created_at" <= ${new Date(endDate)}`);
+    }
+
+    const finalRawDateWhereClause =
+      rawDateConditions.length > 0
+        ? Prisma.sql`AND ${Prisma.join(rawDateConditions, ' AND ')}`
+        : Prisma.empty;
 
     // Toutes les requêtes d'agrégation en parallèle pour la performance
     const [
@@ -150,7 +157,7 @@ export class AnalyticsService {
       SELECT COALESCE(SUM(pv.quantity_in_stock * pv.purchase_price), 0) as sum
       FROM "ProductVariant" pv
       JOIN "Product" p ON pv."product_id" = p.id
-      WHERE p."businessId" = ${businessId}
+      WHERE p."business_id" = ${businessId}
     `;
     const currentInventoryValue = inventoryValueResult[0]?.sum || 0;
 
@@ -158,12 +165,12 @@ export class AnalyticsService {
     const uniqueCustomersResult = await this.prisma.$queryRaw<
       { count: bigint }[]
     >`
-      SELECT COUNT(DISTINCT "customerId") as count
+      SELECT COUNT(DISTINCT "customer_id") as count
       FROM "Order"
-      WHERE "businessId" = ${businessId}
+      WHERE "business_id" = ${businessId}
       AND type = ${OrderType.SALE}::"OrderType"
       AND status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
-      ${Prisma.sql`${rawDateWhereClause}`}
+      ${finalRawDateWhereClause}
     `;
     const uniqueCustomers = uniqueCustomersResult[0]?.count
       ? Number(uniqueCustomersResult[0].count)
@@ -232,8 +239,8 @@ export class AnalyticsService {
           COALESCE(SUM(o.total_amount), 0) as "totalAmount",
           COALESCE(SUM(ol.quantity), 0) as "totalItems"
         FROM "Order" o
-        JOIN "OrderLine" ol ON o.id = ol."orderId"
-        WHERE o."businessId" = ${businessId}
+        JOIN "OrderLine" ol ON o.id = ol."order_id"
+        WHERE o."business_id" = ${businessId}
           AND o.type = ${OrderType.SALE}::"OrderType"
           AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
           ${startDate ? Prisma.sql`AND o."created_at" >= ${new Date(startDate)}` : Prisma.empty}
@@ -257,19 +264,19 @@ export class AnalyticsService {
           pv.id as "variantId",
           pv.sku,
           p.name as "productName",
-          pv."imageUrl" as "variantImageUrl",
+          pv."image_url" as "variantImageUrl",
           COALESCE(SUM(ol.quantity), 0) as "totalQuantitySold",
           COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue"
         FROM "OrderLine" ol
-        JOIN "Order" o ON ol."orderId" = o.id
-        JOIN "ProductVariant" pv ON ol."variantId" = pv.id
+        JOIN "Order" o ON ol."order_id" = o.id
+        JOIN "ProductVariant" pv ON ol."variant_id" = pv.id
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE o."businessId" = ${businessId}
+        WHERE o."business_id" = ${businessId}
           AND o.type = ${OrderType.SALE}::"OrderType"
           AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
           ${startDate ? Prisma.sql`AND o."created_at" >= ${new Date(startDate)}` : Prisma.empty}
           ${endDate ? Prisma.sql`AND o."created_at" <= ${new Date(endDate)}` : Prisma.empty}
-        GROUP BY pv.id, pv.sku, p.name, pv."imageUrl"
+        GROUP BY pv.id, pv.sku, p.name, pv."image_url"
         ORDER BY "totalQuantitySold" DESC
         LIMIT 10
       `,
@@ -289,11 +296,11 @@ export class AnalyticsService {
           COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue",
           COALESCE(SUM(ol.quantity), 0) as "totalItemsSold"
         FROM "OrderLine" ol
-        JOIN "Order" o ON ol."orderId" = o.id
-        JOIN "ProductVariant" pv ON ol."variantId" = pv.id
+        JOIN "Order" o ON ol."order_id" = o.id
+        JOIN "ProductVariant" pv ON ol."variant_id" = pv.id
         JOIN "Product" p ON pv."product_id" = p.id
         JOIN "Category" c ON p."category_id" = c.id
-        WHERE o."businessId" = ${businessId}
+        WHERE o."business_id" = ${businessId}
           AND o.type = ${OrderType.SALE}::"OrderType"
           AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
           ${startDate ? Prisma.sql`AND o."created_at" >= ${new Date(startDate)}` : Prisma.empty}
@@ -383,7 +390,7 @@ export class AnalyticsService {
         SELECT COALESCE(SUM(pv.quantity_in_stock * pv.purchase_price), 0) as sum
         FROM "ProductVariant" pv
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE p."businessId" = ${businessId}
+        WHERE p."business_id" = ${businessId}
           ${categoryId ? Prisma.sql`AND p."category_id" = ${categoryId}` : Prisma.empty}
           ${search ? Prisma.sql`AND (p.name ILIKE ${'%' + search + '%'} OR p.description ILIKE ${'%' + search + '%'})` : Prisma.empty}
       `,
@@ -404,7 +411,7 @@ export class AnalyticsService {
           pv.alert_threshold as "alertThreshold"
         FROM "ProductVariant" pv
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE p."businessId" = ${businessId}
+        WHERE p."business_id" = ${businessId}
           AND pv.alert_threshold IS NOT NULL -- S'assurer qu'un seuil est défini
           AND pv.alert_threshold > 0 -- S'assurer que le seuil n'est pas zéro ou négatif
           AND pv.quantity_in_stock <= pv.alert_threshold -- LA COMPARAIISON ENTRE COLONNES
@@ -447,9 +454,9 @@ export class AnalyticsService {
           COALESCE(SUM(ABS(sm.quantity_change)), 0) as "totalQuantity",
           COALESCE(SUM(ABS(sm.quantity_change) * pv.purchase_price), 0) as "totalValue"
         FROM "StockMovement" sm
-        JOIN "ProductVariant" pv ON sm."variantId" = pv.id
+        JOIN "ProductVariant" pv ON sm."variant_id" = pv.id
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE p."businessId" = ${businessId}
+        WHERE p."business_id" = ${businessId}
           AND sm.type IN (${MovementType.LOSS}::"MovementType", ${MovementType.EXPIRATION}::"MovementType")
           ${startDate ? Prisma.sql`AND sm."created_at" >= ${new Date(startDate)}` : Prisma.empty}
           ${endDate ? Prisma.sql`AND sm."created_at" <= ${new Date(endDate)}` : Prisma.empty}
@@ -511,50 +518,53 @@ export class AnalyticsService {
     const skip = (page - 1) * limit;
 
     // Clause de date pour les commandes
-    const dateFilterConditions: string[] = [];
-    if (startDate)
+    // Clause de date pour les commandes (CORRECTION)
+    const dateFilterConditions: Prisma.Sql[] = [];
+    if (startDate) {
       dateFilterConditions.push(
-        `o."created_at" >= '${new Date(startDate).toISOString()}'`,
-      );
-    if (endDate)
-      dateFilterConditions.push(
-        `o."created_at" <= '${new Date(endDate).toISOString()}'`,
-      );
-    const dateWhereClause =
-      dateFilterConditions.length > 0
-        ? `AND ${dateFilterConditions.join(' AND ')}`
-        : '';
-
-    // Clause de recherche pour le client
-    const searchFilterConditions: string[] = [];
-    if (search) {
-      searchFilterConditions.push(
-        `(u."firstName" ILIKE ${'%' + search + '%'} OR u."lastName" ILIKE ${'%' + search + '%'})`,
+        Prisma.sql`o."created_at" >= ${new Date(startDate)}`, // Convertir directement en Date
       );
     }
-    const searchWhereClause =
+    if (endDate) {
+      dateFilterConditions.push(
+        Prisma.sql`o."created_at" <= ${new Date(endDate)}`, // Convertir directement en Date
+      );
+    }
+    const finalDateWhereClause =
+      dateFilterConditions.length > 0
+        ? Prisma.sql`AND ${Prisma.join(dateFilterConditions, ' AND ')}`
+        : Prisma.empty;
+
+    // Clause de recherche pour le client (CORRECTION)
+    const searchFilterConditions: Prisma.Sql[] = [];
+    if (search) {
+      searchFilterConditions.push(
+        Prisma.sql`(u."first_name" ILIKE ${'%' + search + '%'} OR u."last_name" ILIKE ${'%' + search + '%'})`,
+      );
+    }
+    const finalSearchWhereClause =
       searchFilterConditions.length > 0
-        ? `AND ${searchFilterConditions.join(' AND ')}`
-        : '';
+        ? Prisma.sql`AND ${Prisma.join(searchFilterConditions, ' AND ')}`
+        : Prisma.empty;
 
     // Requête RAW pour les meilleurs clients
     // C'est complexe car nous voulons agréger les commandes par client, puis filtrer/paginer
     const topCustomersRaw = await this.prisma.$queryRaw<TopCustomerItem[]>`
       SELECT
-        u.id as "customerId",
-        u."firstName",
-        u."lastName",
-        u."profileImageUrl",
+        u.id as "customer_id",
+        u."first_name" as "firstName",
+        u."last_name" as "lastName",
+        u."profile_image_url" as "profileImageUrl",
         COUNT(o.id) as "totalOrdersPlaced",
         COALESCE(SUM(o."total_amount"), 0) as "totalAmountSpent"
       FROM "User" u
-      JOIN "Order" o ON u.id = o."customerId"
-      WHERE o."businessId" = ${businessId}
+      JOIN "Order" o ON u.id = o."customer_id"
+      WHERE o."business_id" = ${businessId}
         AND o.type = ${OrderType.SALE}::"OrderType"
         AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
-        ${Prisma.sql`${dateWhereClause}`}
-        ${Prisma.sql`${searchWhereClause}`}
-      GROUP BY u.id, u."firstName", u."lastName", u."profileImageUrl"
+        ${Prisma.sql`${finalDateWhereClause}`}
+        ${Prisma.sql`${finalSearchWhereClause}`}
+      GROUP BY u.id, u."first_name", u."last_name", u."profile_image_url"
       ORDER BY "totalAmountSpent" DESC, "totalOrdersPlaced" DESC
       LIMIT ${limit} OFFSET ${skip}
     `;
@@ -565,12 +575,12 @@ export class AnalyticsService {
     >`
       SELECT COUNT(DISTINCT u.id) as count
       FROM "User" u
-      JOIN "Order" o ON u.id = o."customerId"
-      WHERE o."businessId" = ${businessId}
+      JOIN "Order" o ON u.id = o."customer_id"
+      WHERE o."business_id" = ${businessId}
         AND o.type = ${OrderType.SALE}::"OrderType"
         AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
-        ${Prisma.sql`${dateWhereClause}`}
-        ${Prisma.sql`${searchWhereClause}`}
+        ${Prisma.sql`${finalDateWhereClause}`}
+        ${Prisma.sql`${finalSearchWhereClause}`}
     `;
     const totalCustomers = totalCustomersCountRaw[0]?.count
       ? Number(totalCustomersCountRaw[0].count)
@@ -613,11 +623,11 @@ export class AnalyticsService {
     const dateFilterConditions: string[] = [];
     if (startDate)
       dateFilterConditions.push(
-        `o."createdAt" >= '${new Date(startDate).toISOString()}'`,
+        `o."created_at" >= '${new Date(startDate).toISOString()}'`,
       );
     if (endDate)
       dateFilterConditions.push(
-        `o."createdAt" <= '${new Date(endDate).toISOString()}'`,
+        `o."created_at" <= '${new Date(endDate).toISOString()}'`,
       );
     const dateWhereClause =
       dateFilterConditions.length > 0
@@ -661,18 +671,18 @@ export class AnalyticsService {
         SELECT
           pv.id as "variantId",
           p.name as "dishName",
-          pv."imageUrl" as "dishImageUrl",
+          pv."image_url" as "dishImageUrl",
           COALESCE(SUM(ol.quantity), 0) as "totalQuantityOrdered",
           COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue"
         FROM "OrderLine" ol
-        JOIN "Order" o ON ol."orderId" = o.id
-        JOIN "ProductVariant" pv ON ol."variantId" = pv.id
+        JOIN "Order" o ON ol."order_id" = o.id
+        JOIN "ProductVariant" pv ON ol."variant_id" = pv.id
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE o."businessId" = ${businessId}
+        WHERE o."business_id" = ${businessId}
           AND o.type IN (${OrderType.SALE}::"OrderType", ${OrderType.RESERVATION}::"OrderType") -- Prend en compte ventes et pré-commandes
           AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus", ${OrderStatus.CONFIRMED}::"OrderStatus")
           ${Prisma.sql`${dateWhereClause}`}
-        GROUP BY pv.id, p.name, pv."imageUrl"
+        GROUP BY pv.id, p.name, pv."image_url"
         ORDER BY "totalQuantityOrdered" DESC
         LIMIT 10
       `,
@@ -683,7 +693,7 @@ export class AnalyticsService {
           ${this.getPeriodFormat(unit)} as period,
           COUNT(o.id) as "totalReservations"
         FROM "Order" o
-        WHERE o."businessId" = ${businessId}
+        WHERE o."business_id" = ${businessId}
           AND o.type = ${OrderType.RESERVATION}::"OrderType"
           AND o.status IN (${OrderStatus.CONFIRMED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
           ${Prisma.sql`${dateWhereClause}`}
@@ -774,15 +784,23 @@ export class AnalyticsService {
     if (startDate) dateFilter.gte = new Date(startDate);
     if (endDate) dateFilter.lte = new Date(endDate);
 
-    const rawDateFilter: string[] = [];
-    if (startDate)
-      rawDateFilter.push(
-        `"createdAt" >= '${new Date(startDate).toISOString()}'`,
+    // --- CORRECTION APPLIQUÉE POUR LA REQUÊTE RAW ---
+    const rawDateConditions: Prisma.Sql[] = [];
+    if (startDate) {
+      rawDateConditions.push(
+        Prisma.sql`sm."created_at" >= ${new Date(startDate)}`,
       );
-    if (endDate)
-      rawDateFilter.push(`"createdAt" <= '${new Date(endDate).toISOString()}'`);
+    }
+    if (endDate) {
+      rawDateConditions.push(
+        Prisma.sql`sm."created_at" <= ${new Date(endDate)}`,
+      );
+    }
     const rawDateWhereClause =
-      rawDateFilter.length > 0 ? `AND ${rawDateFilter.join(' AND ')}` : '';
+      rawDateConditions.length > 0
+        ? Prisma.sql`AND ${Prisma.join(rawDateConditions, ' AND ')}`
+        : Prisma.empty;
+    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     const [
       salesProcessedAggregates,
@@ -864,12 +882,12 @@ export class AnalyticsService {
       this.prisma.$queryRaw<{ totalLosses: number }[]>`
         SELECT COALESCE(SUM(ABS(sm.quantity_change) * pv.purchase_price), 0) as "totalLosses"
         FROM "StockMovement" sm
-        JOIN "ProductVariant" pv ON sm."variantId" = pv.id
+        JOIN "ProductVariant" pv ON sm."variant_id" = pv.id
         JOIN "Product" p ON pv."product_id" = p.id
-        WHERE p."businessId" = ${businessId}
-          AND sm."performedById" = ${memberId} -- Stats pour CE membre
+        WHERE p."business_id" = ${businessId}
+          AND sm."performed_by_id" = ${memberId} -- Stats pour CE membre
           AND sm.type IN (${MovementType.LOSS}::"MovementType", ${MovementType.EXPIRATION}::"MovementType")
-          ${Prisma.sql`${rawDateWhereClause}`}
+          ${rawDateWhereClause} -- UTILISATION CORRECTE ICI
       `,
     ]);
 
@@ -884,7 +902,10 @@ export class AnalyticsService {
     const totalReservationsManaged =
       reservationsManagedAggregates._count?.id || 0;
     const totalInventoryAdjustments = inventoryAdjustmentsCount;
-    const totalLossesManaged = totalLossesManagedRaw[0]?.totalLosses || 0;
+    // Assurez-vous que totalLossesManagedRaw[0]?.totalLosses est un nombre avant .toNumber()
+    const totalLossesManaged = totalLossesManagedRaw[0]?.totalLosses
+      ? totalLossesManagedRaw[0].totalLosses
+      : 0;
 
     return {
       totalSalesProcessed,
@@ -896,5 +917,325 @@ export class AnalyticsService {
       totalInventoryAdjustments,
       totalLossesManaged,
     };
+  }
+
+  // --- NOUVELLE MÉTHODE POUR LES VENTES DÉTAILLÉES DU MEMBRE ---
+  async getMemberSalesDetails(
+    businessId: string,
+    memberId: string,
+    requestingUserId: string,
+    queryDto: QuerySalesDto,
+  ) {
+    await this.verifyMemberAccess(businessId, memberId, requestingUserId);
+
+    const { startDate, endDate, unit = SalesPeriodUnit.MONTH } = queryDto;
+
+    const dateFilterConditions: Prisma.Sql[] = [];
+    if (startDate)
+      dateFilterConditions.push(
+        Prisma.sql`o."created_at" >= ${new Date(startDate)}`,
+      );
+    if (endDate)
+      dateFilterConditions.push(
+        Prisma.sql`o."created_at" <= ${new Date(endDate)}`,
+      );
+    const dateWhereClause =
+      dateFilterConditions.length > 0
+        ? Prisma.sql`AND ${Prisma.join(dateFilterConditions, ' AND ')}`
+        : Prisma.empty;
+
+    const [salesByPeriodRaw, topSellingProductsRaw, salesByProductCategoryRaw] =
+      await this.prisma.$transaction([
+        // Ventes par période pour ce membre
+        this.prisma.$queryRaw<
+          { period: string; totalAmount: Prisma.Decimal; totalItems: bigint }[]
+        >`
+        SELECT
+          ${this.getPeriodFormat(unit)} as period,
+          COALESCE(SUM(o.total_amount), 0) as "totalAmount",
+          COALESCE(SUM(ol.quantity), 0) as "totalItems"
+        FROM "Order" o
+        JOIN "OrderLine" ol ON o.id = ol."order_id"
+        WHERE o."business_id" = ${businessId}
+          AND o."employee_id" = ${memberId} -- Filtrer par l'employé
+          AND o.type = ${OrderType.SALE}::"OrderType"
+          AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
+          ${Prisma.sql`${dateWhereClause}`}
+        GROUP BY period
+        ORDER BY period ASC
+      `,
+
+        // Top produits vendus par ce membre
+        this.prisma.$queryRaw<
+          {
+            variantId: string;
+            sku: string;
+            productName: string;
+            variantImageUrl: string;
+            totalQuantitySold: bigint;
+            totalRevenue: Prisma.Decimal;
+          }[]
+        >`
+        SELECT
+          pv.id as "variantId",
+          pv.sku,
+          p.name as "productName",
+          pv."image_url" as "variantImageUrl",
+          COALESCE(SUM(ol.quantity), 0) as "totalQuantitySold",
+          COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue"
+        FROM "OrderLine" ol
+        JOIN "Order" o ON ol."order_id" = o.id
+        JOIN "ProductVariant" pv ON ol."variant_id" = pv.id
+        JOIN "Product" p ON pv."product_id" = p.id
+        WHERE o."business_id" = ${businessId}
+          AND o."employee_id" = ${memberId} -- Filtrer par l'employé
+          AND o.type = ${OrderType.SALE}::"OrderType"
+          AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
+          ${Prisma.sql`${dateWhereClause}`}
+        GROUP BY pv.id, pv.sku, p.name, pv."image_url"
+        ORDER BY "totalQuantitySold" DESC
+        LIMIT 10
+      `,
+
+        // Ventes par catégorie de produit par ce membre
+        this.prisma.$queryRaw<
+          {
+            categoryId: string;
+            categoryName: string;
+            totalRevenue: Prisma.Decimal;
+            totalItemsSold: bigint;
+          }[]
+        >`
+        SELECT
+          c.id as "categoryId",
+          c.name as "categoryName",
+          COALESCE(SUM(ol.quantity * ol.price), 0) as "totalRevenue",
+          COALESCE(SUM(ol.quantity), 0) as "totalItemsSold"
+        FROM "OrderLine" ol
+        JOIN "Order" o ON ol."order_id" = o.id
+        JOIN "ProductVariant" pv ON ol."variant_id" = pv.id
+        JOIN "Product" p ON pv."product_id" = p.id
+        JOIN "Category" c ON p."category_id" = c.id
+        WHERE o."business_id" = ${businessId}
+          AND o."employee_id" = ${memberId} -- Filtrer par l'employé
+          AND o.type = ${OrderType.SALE}::"OrderType"
+          AND o.status IN (${OrderStatus.DELIVERED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
+          ${Prisma.sql`${dateWhereClause}`}
+        GROUP BY c.id, c.name
+        ORDER BY "totalRevenue" DESC
+      `,
+      ]);
+
+    return {
+      salesByPeriod: salesByPeriodRaw.map((item) => ({
+        ...item,
+        totalAmount: item.totalAmount.toNumber(),
+        totalItems: Number(item.totalItems),
+      })),
+      topSellingProducts: topSellingProductsRaw.map((item) => ({
+        ...item,
+        totalQuantitySold: Number(item.totalQuantitySold),
+        totalRevenue: item.totalRevenue.toNumber(),
+      })),
+      salesByProductCategory: salesByProductCategoryRaw.map((item) => ({
+        ...item,
+        totalRevenue: item.totalRevenue.toNumber(),
+        totalItemsSold: Number(item.totalItemsSold),
+      })),
+    };
+  }
+
+  // --- NOUVELLE MÉTHODE POUR LES MOUVEMENTS D'INVENTAIRE DU MEMBRE ---
+  async getMemberInventoryMovements(
+    businessId: string,
+    memberId: string,
+    requestingUserId: string,
+    queryDto: QueryInventoryDto,
+  ) {
+    await this.verifyMemberAccess(businessId, memberId, requestingUserId);
+
+    const { page = 1, limit = 10, search, startDate, endDate } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.StockMovementWhereInput = {
+      businessId,
+      performedById: memberId, // Filtrer par l'employé
+    };
+
+    if (search) {
+      where.OR = [
+        { reason: { contains: search, mode: 'insensitive' } },
+        {
+          variant: {
+            product: { name: { contains: search, mode: 'insensitive' } },
+          },
+        },
+        { variant: { sku: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    const [movements, total] = await this.prisma.$transaction([
+      this.prisma.stockMovement.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          variant: {
+            select: {
+              id: true,
+              sku: true,
+              imageUrl: true,
+              product: { select: { name: true } },
+            },
+          },
+          order: { select: { id: true, orderNumber: true } },
+        },
+      }),
+      this.prisma.stockMovement.count({ where }),
+    ]);
+
+    return {
+      data: movements,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // --- NOUVELLE MÉTHODE POUR LES COMMANDES DU MEMBRE ---
+  async getMemberOrders(
+    businessId: string,
+    memberId: string,
+    requestingUserId: string,
+    queryDto: QueryOrdersDto,
+  ) {
+    await this.verifyMemberAccess(businessId, memberId, requestingUserId);
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      type,
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+    } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.OrderWhereInput = {
+      businessId,
+      employeeId: memberId, // Filtrer par l'employé
+      status,
+      type,
+    };
+
+    if (search) {
+      where.OR = [
+        { orderNumber: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+        { customer: { firstName: { contains: search, mode: 'insensitive' } } },
+        { customer: { lastName: { contains: search, mode: 'insensitive' } } },
+        {
+          lines: {
+            some: {
+              variant: {
+                product: { name: { contains: search, mode: 'insensitive' } },
+              },
+            },
+          },
+        },
+      ];
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      where.totalAmount = {};
+      if (minAmount !== undefined)
+        where.totalAmount.gte = new Prisma.Decimal(minAmount);
+      if (maxAmount !== undefined)
+        where.totalAmount.lte = new Prisma.Decimal(maxAmount);
+    }
+
+    const [orders, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          lines: {
+            include: {
+              variant: {
+                select: {
+                  id: true,
+                  sku: true,
+                  imageUrl: true,
+                  product: { select: { name: true } },
+                },
+              },
+            },
+          },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profileImageUrl: true,
+            },
+          },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      data: orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // --- Helper pour la vérification d'accès aux stats de membre ---
+  private async verifyMemberAccess(
+    businessId: string,
+    memberId: string,
+    requestingUserId: string,
+  ) {
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { ownerId: true },
+    });
+    if (!business) {
+      throw new NotFoundException('Entreprise non trouvée.');
+    }
+
+    const isSelf = memberId === requestingUserId;
+    const isOwner = business.ownerId === requestingUserId;
+    const isAdminOfBusiness = await this.prisma.businessMember.findUnique({
+      where: {
+        userId_businessId: { userId: requestingUserId, businessId: businessId },
+        role: 'ADMIN',
+      },
+    });
+
+    if (!isSelf && !isOwner && !isAdminOfBusiness) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à consulter les statistiques de ce membre.",
+      );
+    }
   }
 }
