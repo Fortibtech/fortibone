@@ -620,19 +620,19 @@ export class AnalyticsService {
 
     const { startDate, endDate, unit = SalesPeriodUnit.MONTH } = queryDto; // unité par défaut pour les réservations
 
-    const dateFilterConditions: string[] = [];
+    const dateFilterConditions: Prisma.Sql[] = [];
     if (startDate)
       dateFilterConditions.push(
-        `o."created_at" >= '${new Date(startDate).toISOString()}'`,
+        Prisma.sql`o."created_at" >= ${new Date(startDate)}`,
       );
     if (endDate)
       dateFilterConditions.push(
-        `o."created_at" <= '${new Date(endDate).toISOString()}'`,
+        Prisma.sql`o."created_at" <= ${new Date(endDate)}`,
       );
     const dateWhereClause =
       dateFilterConditions.length > 0
-        ? `AND ${dateFilterConditions.join(' AND ')}`
-        : '';
+        ? Prisma.sql`AND ${Prisma.join(dateFilterConditions, ' AND ')}`
+        : Prisma.empty;
 
     const [
       totalReservationsResult,
@@ -696,7 +696,7 @@ export class AnalyticsService {
         WHERE o."business_id" = ${businessId}
           AND o.type = ${OrderType.RESERVATION}::"OrderType"
           AND o.status IN (${OrderStatus.CONFIRMED}::"OrderStatus", ${OrderStatus.COMPLETED}::"OrderStatus")
-          ${Prisma.sql`${dateWhereClause}`}
+          ${dateWhereClause}
         GROUP BY period
         ORDER BY period ASC
       `,
