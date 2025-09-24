@@ -82,7 +82,9 @@ export class OrdersService {
         orderData.employee = { connect: { id: user.id } }; // L'employé qui a passé la commande
       }
       if (dto.type === OrderType.RESERVATION) {
-        orderData.tableNumber = dto.tableNumber;
+        orderData.table = dto.tableId
+          ? { connect: { id: dto.tableId } }
+          : undefined;
         orderData.reservationDate = dto.reservationDate
           ? new Date(dto.reservationDate)
           : undefined;

@@ -16,6 +16,7 @@ import {
   generateRandomPhoneNumber,
   getRandomElement,
   getAttributeByNameAndCategory,
+  getCategoryByName,
 } from './utils/helpers';
 
 const prisma = new PrismaClient();
@@ -453,6 +454,126 @@ async function main() {
   });
   console.log('Products and variants seeded.');
 
+  // --- 7.3. PRODUITS POUR LE RESTAURANT ---
+  console.log('Seeding restaurant products (dishes)...');
+
+  const pizzaMargherita = await prisma.product.create({
+    data: {
+      businessId: restaurant1.id,
+      categoryId: foodCategory.id,
+      name: 'Pizza Margherita',
+      description: 'Sauce tomate, mozzarella, basilic frais.',
+      salesUnit: SalesUnit.UNIT,
+      imageUrl: 'https://picsum.photos/seed/pizza/600/400',
+    },
+  });
+  const pizzaVariant = await prisma.productVariant.create({
+    data: {
+      productId: pizzaMargherita.id,
+      price: new Prisma.Decimal(12.5),
+      purchasePrice: new Prisma.Decimal(4.0),
+      quantityInStock: 999, // Stock "infini" pour les plats
+      sku: 'PIZZA-MARG',
+      batches: { create: [{ quantity: 999 }] },
+    },
+  });
+
+  const boissonSoda = await prisma.product.create({
+    data: {
+      businessId: restaurant1.id,
+      categoryId: foodCategory.id,
+      name: 'Soda au choix',
+      description: 'Cola, Limonade, etc.',
+      salesUnit: SalesUnit.UNIT,
+      imageUrl: 'https://picsum.photos/seed/soda/600/400',
+    },
+  });
+  const sodaVariant = await prisma.productVariant.create({
+    data: {
+      productId: boissonSoda.id,
+      price: new Prisma.Decimal(3.5),
+      purchasePrice: new Prisma.Decimal(0.5),
+      quantityInStock: 999,
+      sku: 'SODA-DRINK',
+      batches: { create: [{ quantity: 999 }] },
+    },
+  });
+
+  const dessertTiramisu = await prisma.product.create({
+    data: {
+      businessId: restaurant1.id,
+      categoryId: foodCategory.id,
+      name: 'Tiramisu Maison',
+      description: 'Le classique italien fait avec amour.',
+      salesUnit: SalesUnit.UNIT,
+      imageUrl: 'https://picsum.photos/seed/tiramisu/600/400',
+    },
+  });
+  const tiramisuVariant = await prisma.productVariant.create({
+    data: {
+      productId: dessertTiramisu.id,
+      price: new Prisma.Decimal(7.0),
+      purchasePrice: new Prisma.Decimal(2.0),
+      quantityInStock: 999,
+      sku: 'DESSERT-TIRA',
+      batches: { create: [{ quantity: 999 }] },
+    },
+  });
+  console.log('Restaurant products seeded.');
+
+  // --- NOUVELLE SECTION : TABLES DU RESTAURANT ---
+  console.log('Seeding restaurant tables...');
+  const table1 = await prisma.restaurantTable.create({
+    data: {
+      businessId: restaurant1.id,
+      name: 'Table 1 (Fenêtre)',
+      capacity: 2,
+    },
+  });
+  const table2 = await prisma.restaurantTable.create({
+    data: {
+      businessId: restaurant1.id,
+      name: 'Table 2',
+      capacity: 4,
+    },
+  });
+  const table3 = await prisma.restaurantTable.create({
+    data: {
+      businessId: restaurant1.id,
+      name: 'Table 3 (Banquette)',
+      capacity: 6,
+    },
+  });
+  const table4 = await prisma.restaurantTable.create({
+    data: {
+      businessId: restaurant1.id,
+      name: 'Terrasse 1',
+      capacity: 4,
+    },
+  });
+  console.log('Restaurant tables seeded.');
+
+  // --- NOUVELLE SECTION : MENUS DU RESTAURANT ---
+  console.log('Seeding restaurant menus...');
+  const menuDuJour = await prisma.menu.create({
+    data: {
+      businessId: restaurant1.id,
+      name: 'Menu du Midi',
+      description: 'Plat + Boisson + Dessert',
+      price: new Prisma.Decimal(21.0),
+      isActive: true,
+      menuItems: {
+        create: [
+          { variantId: pizzaVariant.id, quantity: 1 },
+          { variantId: sodaVariant.id, quantity: 1 },
+          { variantId: tiramisuVariant.id, quantity: 1 },
+        ],
+      },
+    },
+  });
+
+  console.log('Restaurant menus seeded.');
+
   // --- 8. AVIS ---
   console.log('Seeding reviews...');
   await prisma.review.createMany({
@@ -566,24 +687,24 @@ async function main() {
   });
 
   // 10.3. Réservation
-  const reservationOrder = await prisma.order.create({
-    data: {
-      orderNumber: `RES-${faker.string.alphanumeric(8).toUpperCase()}`,
-      type: OrderType.RESERVATION,
-      status: OrderStatus.CONFIRMED,
-      totalAmount: new Prisma.Decimal(0.0), // Une réservation de table n'a pas forcément un montant initial
-      notes: 'Table pour 4 personnes, vue sur la cuisine.',
-      businessId: restaurant1.id,
-      customerId: customerUser.id,
-      tableNumber: 'Table 7',
-      reservationDate: faker.date.future(),
-      lines: {
-        create: [
-          // On peut ajouter des plats pré-commandés ici si la réservation le permet
-        ],
-      },
-    },
-  });
+  // const reservationOrder = await prisma.order.create({
+  //   data: {
+  //     orderNumber: `RES-${faker.string.alphanumeric(8).toUpperCase()}`,
+  //     type: OrderType.RESERVATION,
+  //     status: OrderStatus.CONFIRMED,
+  //     totalAmount: new Prisma.Decimal(0.0), // Une réservation de table n'a pas forcément un montant initial
+  //     notes: 'Table pour 4 personnes, vue sur la cuisine.',
+  //     businessId: restaurant1.id,
+  //     customerId: customerUser.id,
+  //     tableId: 'Table 7',
+  //     reservationDate: faker.date.future(),
+  //     lines: {
+  //       create: [
+  //         // On peut ajouter des plats pré-commandés ici si la réservation le permet
+  //       ],
+  //     },
+  //   },
+  // });
 
   console.log('Orders seeded.');
 

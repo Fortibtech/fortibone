@@ -15,6 +15,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { RestaurantsModule } from './restaurants/restaurants.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -34,6 +35,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     OrdersModule,
     PaymentsModule,
     AnalyticsModule,
+    RestaurantsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
