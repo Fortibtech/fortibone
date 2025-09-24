@@ -31,46 +31,44 @@ model User {
   // Un 'PARTICULIER' peut aussi devenir membre d'une entreprise.
   profileType ProfileType @default(PARTICULIER)
 
-   // --- CHAMPS AJOUTÉS POUR LA VÉRIFICATION ET LA RÉINITIALISATION ---
-  isEmailVerified           Boolean   @default(false) @map("is_email_verified")
-  otp                       String?   // One-Time Password pour la vérification email
-  otpExpiresAt              DateTime? @map("otp_expires_at")
-  lastOtpSentAt             DateTime? @map("last_otp_sent_at")
-  passwordResetToken        String?   @map("password_reset_token")
+  // --- CHAMPS AJOUTÉS POUR LA VÉRIFICATION ET LA RÉINITIALISATION ---
+  isEmailVerified             Boolean   @default(false) @map("is_email_verified")
+  otp                         String? // One-Time Password pour la vérification email
+  otpExpiresAt                DateTime? @map("otp_expires_at")
+  lastOtpSentAt               DateTime? @map("last_otp_sent_at")
+  passwordResetToken          String?   @map("password_reset_token")
   passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
   // -----------------------------------------------------------------
 
-   // --- NOUVEAUX CHAMPS DE PROFIL ---
-  dateOfBirth     DateTime? @map("date_of_birth")
-  country         String?
-  city            String?
-  gender          Gender?
+  // --- NOUVEAUX CHAMPS DE PROFIL ---
+  dateOfBirth DateTime? @map("date_of_birth")
+  country     String?
+  city        String?
+  gender      Gender?
   // ---------------------------------
 
   // Relations
   memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
   invitations      Invitation[] // Les entreprises dont cet utilisateur est membre/employé
-  ordersAsCustomer Order[]          @relation("CustomerOrders") // Commandes passées en tant que client
-  ordersAsEmployee Order[]          @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
+  ordersAsCustomer Order[]           @relation("CustomerOrders") // Commandes passées en tant que client
+  ordersAsEmployee Order[]           @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
   reviews          Review[]
-  businessReviews   BusinessReview[]
+  businessReviews  BusinessReview[]
   businesses       Business[]
   stockMovements   StockMovement[]
   favoriteProducts FavoriteProduct[]
 }
 
-
 // NOUVEAU MODÈLE POUR LES DEVISES
 model Currency {
-  id           String  @id @default(cuid())
-  code         String  @unique // Code ISO 4217, ex: "EUR", "USD"
-  name         String  // ex: "Euro", "US Dollar"
-  symbol       String  // ex: "€", "$"
-  exchangeRate Float   @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
+  id           String @id @default(cuid())
+  code         String @unique // Code ISO 4217, ex: "EUR", "USD"
+  name         String // ex: "Euro", "US Dollar"
+  symbol       String // ex: "€", "$"
+  exchangeRate Float  @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
 
   businesses Business[]
 }
-
 
 model Business {
   id            String                                @id @default(cuid())
@@ -86,36 +84,37 @@ model Business {
   createdAt     DateTime                              @default(now()) @map("created_at")
   updatedAt     DateTime                              @updatedAt @map("updated_at")
 
-   // --- CHAMP AJOUTÉ POUR LA DEVISE ---
+  // --- CHAMP AJOUTÉ POUR LA DEVISE ---
   currency   Currency? @relation(fields: [currencyId], references: [id])
   currencyId String?   @map("currency_id")
 
-
   // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
-  averageRating Float     @default(0) @map("average_rating")
-  reviewCount   Int       @default(0) @map("review_count")
+  averageRating Float @default(0) @map("average_rating")
+  reviewCount   Int   @default(0) @map("review_count")
 
   // --- RELATIONS AJOUTÉES ---
-  openingHours  OpeningHour[]
-  reviews       BusinessReview[]
-  invitations   Invitation[]
+  openingHours OpeningHour[]
+  reviews      BusinessReview[]
+  invitations  Invitation[]
 
   // Relations
-  owner          User             @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
-  ownerId        String           @map("owner_id")
-  members        BusinessMember[]
-  products       Product[]
-  ordersReceived Order[]          @relation("BusinessOrders") // Commandes reçues (ventes, réservations)
-  ordersPlaced   Order[]          @relation("BusinessPurchases") // Commandes passées (achats)
-  stockMovements StockMovement[]
+  owner           User              @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
+  ownerId         String            @map("owner_id")
+  members         BusinessMember[]
+  products        Product[]
+  ordersReceived  Order[]           @relation("BusinessOrders") // Commandes reçues (ventes, réservations)
+  ordersPlaced    Order[]           @relation("BusinessPurchases") // Commandes passées (achats)
+  stockMovements  StockMovement[]
+  restaurantTables RestaurantTable[]
+  menus            Menu[]
 }
 
 // --- NOUVEAU MODÈLE POUR LES HORAIRES D'OUVERTURE ---
 model OpeningHour {
-  id         String    @id @default(cuid())
-  dayOfWeek  DayOfWeek @map("day_of_week")
-  openTime   String    @map("open_time") // Format "HH:mm"
-  closeTime  String    @map("close_time") // Format "HH:mm"
+  id        String    @id @default(cuid())
+  dayOfWeek DayOfWeek @map("day_of_week")
+  openTime  String    @map("open_time") // Format "HH:mm"
+  closeTime String    @map("close_time") // Format "HH:mm"
 
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   businessId String   @map("business_id")
@@ -148,7 +147,6 @@ enum DayOfWeek {
   SATURDAY
   SUNDAY
 }
-
 
 // Table de jointure pour lier les Utilisateurs aux Entreprises (Employés)
 model BusinessMember {
@@ -198,11 +196,11 @@ model Product {
   // Ce produit est-il destiné à la vente en gros (lot) ou au détail (unité) ?
   salesUnit   SalesUnit @default(UNIT)
 
-  imageUrl    String?   @map("image_url") // Image principale/par défaut du produit
+  imageUrl String? @map("image_url") // Image principale/par défaut du produit
 
-   // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
-  averageRating Float     @default(0) @map("average_rating")
-  reviewCount   Int       @default(0) @map("review_count")
+  // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
+  averageRating Float @default(0) @map("average_rating")
+  reviewCount   Int   @default(0) @map("review_count")
 
   // Relations
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -212,18 +210,18 @@ model Product {
   variants   ProductVariant[]
   reviews    Review[]
 
-  favoritedBy  FavoriteProduct[]
+  favoritedBy FavoriteProduct[]
 }
 
 // --- NOUVEAU MODÈLE POUR LA GESTION DES LOTS ---
 model ProductBatch {
-  id              String    @id @default(cuid())
-  quantity        Int       // Quantité restante dans ce lot
-  expirationDate  DateTime? @map("expiration_date") // Date de péremption (optionnelle)
-  receivedAt      DateTime  @default(now()) @map("received_at") // Date de réception du lot
+  id             String    @id @default(cuid())
+  quantity       Int // Quantité restante dans ce lot
+  expirationDate DateTime? @map("expiration_date") // Date de péremption (optionnelle)
+  receivedAt     DateTime  @default(now()) @map("received_at") // Date de réception du lot
 
-  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId       String         @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId String         @map("variant_id")
 }
 
 model ProductVariant {
@@ -239,17 +237,17 @@ model ProductVariant {
   itemsPerLot Int?     @map("items_per_lot") // Nombre d'unités par lot
   lotPrice    Decimal? @map("lot_price") // Prix du lot
 
-  imageUrl        String? @map("image_url") // AJOUTER : Image spécifique à la variante
-
+  imageUrl String? @map("image_url") // AJOUTER : Image spécifique à la variante
 
   // Relations
   product         Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId       String                  @map("product_id")
   attributeValues VariantAttributeValue[]
-  orderLines       OrderLine[]
+  orderLines      OrderLine[]
   stockMovements  StockMovement[]
   batches         ProductBatch[] // Nouvelle relation vers les lots
 
+  menuItems MenuItem[]
 }
 
 // Valeur d'un attribut pour une variante (ex: "Taille" = "M", "Couleur" = "Bleu")
@@ -294,38 +292,37 @@ model StockMovement {
   performedById String         @map("performed_by_id")
 }
 
-
 // --- NOUVEAUX MODÈLES POUR LES RESTAURANTS ---
 model RestaurantTable {
-  id          String    @id @default(cuid())
-  name        String    // Ex: "Table 2", "Terrasse 5"
+  id          String  @id @default(cuid())
+  name        String // Ex: "Table 2", "Terrasse 5"
   capacity    Int
-  isAvailable Boolean   @default(true) // Statut rapide
+  isAvailable Boolean @default(true) // Statut rapide
 
-  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId  String    @map("business_id")
-  orders      Order[]
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String   @map("business_id")
+  orders     Order[]
 
   @@unique([businessId, name]) // Le nom de la table doit être unique par restaurant
 }
 
 model Menu {
-  id          String     @id @default(cuid())
-  name        String     // Ex: "Menu du Jour"
+  id          String  @id @default(cuid())
+  name        String // Ex: "Menu du Jour"
   description String?
   price       Decimal
-  isActive    Boolean    @default(true)
+  isActive    Boolean @default(true)
 
-  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId  String     @map("business_id")
-  menuItems   MenuItem[]
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String     @map("business_id")
+  menuItems  MenuItem[]
 
   @@unique([businessId, name])
 }
 
 model MenuItem {
-  id        String @id @default(cuid())
-  quantity  Int    @default(1)
+  id       String @id @default(cuid())
+  quantity Int    @default(1)
 
   menu      Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
   menuId    String         @map("menu_id")
@@ -334,7 +331,6 @@ model MenuItem {
 
   @@unique([menuId, variantId])
 }
-
 
 // ----------------------------------------
 // ---     MODÈLES COMMANDES & AVIS     ---
@@ -368,17 +364,17 @@ model Order {
   employeeId           String?   @map("employee_id")
 
   // -- Table de restaurant pour les réservations --
-  table       RestaurantTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  tableId     String?          @map("table_id")
-  reservationDate DateTime?      @map("reservation_date")
+  table           RestaurantTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  tableId         String?          @map("table_id")
+  reservationDate DateTime?        @map("reservation_date")
 
-   // --- CHAMPS AJOUTÉS POUR LE PAIEMENT ---
-  paymentMethod PaymentMethodEnum? @map("payment_method")
-  paymentIntentId String?          @unique @map("payment_intent_id") // ID du PaymentIntent de Stripe, etc.
-  transactionId   String?          @unique @map("transaction_id")    // ID final de la transaction validée
+  // --- CHAMPS AJOUTÉS POUR LE PAIEMENT ---
+  paymentMethod   PaymentMethodEnum? @map("payment_method")
+  paymentIntentId String?            @unique @map("payment_intent_id") // ID du PaymentIntent de Stripe, etc.
+  transactionId   String?            @unique @map("transaction_id") // ID final de la transaction validée
   // ------------------------------------
 
-  payments      PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
+  payments PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
 
   lines          OrderLine[]
   stockMovements StockMovement[]
@@ -398,18 +394,18 @@ model OrderLine {
 
 // --- NOUVEAU MODÈLE POUR LE SUIVI DES TRANSACTIONS DE PAIEMENT ---
 model PaymentTransaction {
-  id                  String           @id @default(cuid())
-  amount              Decimal
-  currencyCode        String           @map("currency_code")
-  provider            PaymentMethodEnum // Ex: STRIPE, MVOLA, MANUAL
-  providerTransactionId String?          @unique @map("provider_transaction_id") // L'ID côté fournisseur (ex: ch_12345)
-  status              PaymentStatus    @default(PENDING) // PENDING, SUCCESS, FAILED, REFUNDED
-  metadata            Json?            // Pour stocker des informations spécifiques au fournisseur
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
+  id                    String            @id @default(cuid())
+  amount                Decimal
+  currencyCode          String            @map("currency_code")
+  provider              PaymentMethodEnum // Ex: STRIPE, MVOLA, MANUAL
+  providerTransactionId String?           @unique @map("provider_transaction_id") // L'ID côté fournisseur (ex: ch_12345)
+  status                PaymentStatus     @default(PENDING) // PENDING, SUCCESS, FAILED, REFUNDED
+  metadata              Json? // Pour stocker des informations spécifiques au fournisseur
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
-  order               Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId             String           @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String @map("order_id")
 }
 
 model Review {
@@ -469,18 +465,18 @@ enum OrderType {
 enum OrderStatus {
   PENDING
   PENDING_PAYMENT // Nouveau: La commande attend le paiement
-  PAID          // Nouveau: Paiement reçu
-  PAYMENT_FAILED  // Nouveau: Paiement échoué
+  PAID // Nouveau: Paiement reçu
+  PAYMENT_FAILED // Nouveau: Paiement échoué
   CONFIRMED
   PROCESSING
   SHIPPED
   DELIVERED
   COMPLETED
   CANCELLED
-  REJECTED      // Nouveau: Commande rejetée par le vendeur (utile pour B2B)
+  REJECTED // Nouveau: Commande rejetée par le vendeur (utile pour B2B)
   PENDING_APPROVAL // Nouveau: Pour les commandes B2B en attente d'acceptation par le fournisseur
   PENDING_REFUND // Nouveau: Remboursement en cours
-  REFUNDED      // Nouveau: Entièrement remboursé
+  REFUNDED // Nouveau: Entièrement remboursé
   PARTIALLY_REFUNDED // Nouveau: Partiellement remboursé  
 }
 
@@ -501,7 +497,6 @@ enum PaymentStatus {
   PARTIALLY_REFUNDED
 }
 
-
 // --- NOUVELLE ENUM POUR LE SEXE ---
 enum Gender {
   MALE
@@ -512,16 +507,16 @@ enum Gender {
 
 // --- NOUVEAU MODÈLE POUR LES INVITATIONS ---
 model Invitation {
-  id         String           @id @default(cuid())
-  email      String // L'email de la personne invitée
-  token      String           @unique // Token unique et sécurisé pour accepter l'invitation
-  role       MemberRole
-  status     InvitationStatus @default(PENDING)
-  expiresAt  DateTime         @map("expires_at")
+  id        String           @id @default(cuid())
+  email     String // L'email de la personne invitée
+  token     String           @unique // Token unique et sécurisé pour accepter l'invitation
+  role      MemberRole
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime         @map("expires_at")
 
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String   @map("business_id")
-  invitedBy  User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId  String   @map("business_id")
+  invitedBy   User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
   invitedById String   @map("invited_by_id")
 
   @@unique([email, businessId]) // Une personne ne peut être invitée qu'une seule fois par entreprise

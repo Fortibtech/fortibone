@@ -62,7 +62,7 @@ export class CreateOrderDto {
   })
   @IsOptional()
   @IsString()
-  tableNumber?: string;
+  tableId?: string;
 
   @ApiPropertyOptional({
     description: 'Date et heure de la réservation (format ISO-8601)',
