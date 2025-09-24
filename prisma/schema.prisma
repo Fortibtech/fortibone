@@ -294,6 +294,48 @@ model StockMovement {
   performedById String         @map("performed_by_id")
 }
 
+
+// --- NOUVEAUX MODÈLES POUR LES RESTAURANTS ---
+model RestaurantTable {
+  id          String    @id @default(cuid())
+  name        String    // Ex: "Table 2", "Terrasse 5"
+  capacity    Int
+  isAvailable Boolean   @default(true) // Statut rapide
+
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId  String    @map("business_id")
+  orders      Order[]
+
+  @@unique([businessId, name]) // Le nom de la table doit être unique par restaurant
+}
+
+model Menu {
+  id          String     @id @default(cuid())
+  name        String     // Ex: "Menu du Jour"
+  description String?
+  price       Decimal
+  isActive    Boolean    @default(true)
+
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId  String     @map("business_id")
+  menuItems   MenuItem[]
+
+  @@unique([businessId, name])
+}
+
+model MenuItem {
+  id        String @id @default(cuid())
+  quantity  Int    @default(1)
+
+  menu      Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  menuId    String         @map("menu_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  variantId String         @map("variant_id")
+
+  @@unique([menuId, variantId])
+}
+
+
 // ----------------------------------------
 // ---     MODÈLES COMMANDES & AVIS     ---
 // ----------------------------------------
@@ -326,8 +368,9 @@ model Order {
   employeeId           String?   @map("employee_id")
 
   // -- Table de restaurant pour les réservations --
-  tableNumber     String?   @map("table_number")
-  reservationDate DateTime? @map("reservation_date")
+  table       RestaurantTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  tableId     String?          @map("table_id")
+  reservationDate DateTime?      @map("reservation_date")
 
    // --- CHAMPS AJOUTÉS POUR LE PAIEMENT ---
   paymentMethod PaymentMethodEnum? @map("payment_method")
