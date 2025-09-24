@@ -130,7 +130,8 @@ export class RestaurantsService {
 
     const bookedTableIds = conflictingReservations
       .filter((r) => r.tableId)
-      .map((r) => r.tableId).filter(Boolean) as string[];
+      .map((r) => r.tableId)
+      .filter(Boolean) as string[];
 
     const tables = await this.prisma.restaurantTable.findMany({
       where: {
