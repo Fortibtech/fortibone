@@ -566,24 +566,24 @@ async function main() {
   });
 
   // 10.3. Réservation
-  const reservationOrder = await prisma.order.create({
-    data: {
-      orderNumber: `RES-${faker.string.alphanumeric(8).toUpperCase()}`,
-      type: OrderType.RESERVATION,
-      status: OrderStatus.CONFIRMED,
-      totalAmount: new Prisma.Decimal(0.0), // Une réservation de table n'a pas forcément un montant initial
-      notes: 'Table pour 4 personnes, vue sur la cuisine.',
-      businessId: restaurant1.id,
-      customerId: customerUser.id,
-      tableNumber: 'Table 7',
-      reservationDate: faker.date.future(),
-      lines: {
-        create: [
-          // On peut ajouter des plats pré-commandés ici si la réservation le permet
-        ],
-      },
-    },
-  });
+  // const reservationOrder = await prisma.order.create({
+  //   data: {
+  //     orderNumber: `RES-${faker.string.alphanumeric(8).toUpperCase()}`,
+  //     type: OrderType.RESERVATION,
+  //     status: OrderStatus.CONFIRMED,
+  //     totalAmount: new Prisma.Decimal(0.0), // Une réservation de table n'a pas forcément un montant initial
+  //     notes: 'Table pour 4 personnes, vue sur la cuisine.',
+  //     businessId: restaurant1.id,
+  //     customerId: customerUser.id,
+  //     tableId: 'Table 7',
+  //     reservationDate: faker.date.future(),
+  //     lines: {
+  //       create: [
+  //         // On peut ajouter des plats pré-commandés ici si la réservation le permet
+  //       ],
+  //     },
+  //   },
+  // });
 
   console.log('Orders seeded.');
 

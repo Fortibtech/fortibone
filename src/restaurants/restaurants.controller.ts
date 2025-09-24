@@ -23,7 +23,7 @@ import { UpdateTableDto } from './dto/update-table.dto';
 import { CreateMenuDto } from './dto/create-menu.dto';
 
 @ApiTags('Restaurants')
-@Controller('businesses/:businessId')
+@Controller('restaurants/:businessId')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RestaurantsController {
@@ -34,7 +34,7 @@ export class RestaurantsController {
   @ApiOperation({ summary: 'Créer une nouvelle table (Admin/Owner requis)' })
   createTable(
     @Param('businessId') businessId: string,
-    @Request() req,
+    @Request() req: { user: { id: string } },
     @Body() dto: CreateTableDto,
   ) {
     return this.restaurantsService.createTable(businessId, req.user.id, dto);
@@ -51,7 +51,7 @@ export class RestaurantsController {
   @ApiOperation({ summary: 'Mettre à jour une table (Admin/Owner requis)' })
   updateTable(
     @Param('tableId') tableId: string,
-    @Request() req,
+    @Request() req: { user: { id: string } },
     @Body() dto: UpdateTableDto,
   ) {
     return this.restaurantsService.updateTable(tableId, req.user.id, dto);
@@ -60,7 +60,10 @@ export class RestaurantsController {
   @Delete('tables/:tableId')
   //   @UseGuards(BusinessAdminGuard)
   @ApiOperation({ summary: 'Supprimer une table (Admin/Owner requis)' })
-  removeTable(@Param('tableId') tableId: string, @Request() req) {
+  removeTable(
+    @Param('tableId') tableId: string,
+    @Request() req: { user: { id: string } },
+  ) {
     return this.restaurantsService.removeTable(tableId, req.user.id);
   }
 
@@ -97,7 +100,7 @@ export class RestaurantsController {
   @ApiOperation({ summary: 'Créer un nouveau menu (Admin/Owner requis)' })
   createMenu(
     @Param('businessId') businessId: string,
-    @Request() req,
+    @Request() req: { user: { id: string } },
     @Body() dto: CreateMenuDto,
   ) {
     return this.restaurantsService.createMenu(businessId, req.user.id, dto);
