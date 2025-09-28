@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTableDto } from './dto/create-table.dto';
@@ -10,6 +11,8 @@ import { UpdateTableDto } from './dto/update-table.dto';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { BusinessType } from '@prisma/client';
+import { AddMenuItemDto } from './dto/add-menu-item.dto';
+import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Injectable()
 export class RestaurantsService {
@@ -142,5 +145,109 @@ export class RestaurantsService {
       orderBy: { name: 'asc' },
     });
     return tables || [];
+  }
+
+  // --- NOUVELLE MÉTHODE POUR METTRE À JOUR UN MENU ---
+  async updateMenu(menuId: string, userId: string, dto: UpdateMenuDto) {
+    const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
+    if (!menu) throw new NotFoundException('Menu non trouvé.');
+    await this.verifyRestaurantOwnership(menu.businessId, userId);
+
+    const { ...menuData } = dto;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Mettre à jour les informations de base du menu (nom, prix, etc.)
+      await tx.menu.update({
+        where: { id: menuId },
+        data: menuData,
+      });
+
+      // 3. Retourner le menu mis à jour avec ses nouveaux items
+      return tx.menu.findUnique({
+        where: { id: menuId },
+        include: {
+          menuItems: {
+            include: {
+              variant: {
+                include: {
+                  product: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  }
+
+  // --- NOUVELLE MÉTHODE POUR SUPPRIMER UN MENU ---
+  async removeMenu(menuId: string, userId: string) {
+    const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
+    if (!menu) throw new NotFoundException('Menu non trouvé.');
+    await this.verifyRestaurantOwnership(menu.businessId, userId);
+
+    // La suppression est en cascade (configurée dans Prisma avec onDelete: Cascade sur MenuItem)
+    // Supprimer le menu supprimera automatiquement tous les MenuItem associés.
+    await this.prisma.menu.delete({
+      where: { id: menuId },
+    });
+
+    return { message: 'Menu supprimé avec succès.' };
+  }
+
+  // --- GESTION DES ÉLÉMENTS DE MENU (MENU ITEMS) ---
+  async addMenuItem(menuId: string, userId: string, dto: AddMenuItemDto) {
+    const menu = await this.prisma.menu.findUnique({ where: { id: menuId } });
+    if (!menu) throw new NotFoundException('Menu non trouvé.');
+    await this.verifyRestaurantOwnership(menu.businessId, userId);
+
+    // Vérifier que la variante n'est pas déjà dans le menu
+    const existingItem = await this.prisma.menuItem.findUnique({
+      where: { menuId_variantId: { menuId, variantId: dto.variantId } },
+    });
+    if (existingItem) {
+      throw new ConflictException('Ce produit est déjà dans le menu.');
+    }
+
+    return this.prisma.menuItem.create({
+      data: {
+        menuId,
+        variantId: dto.variantId,
+        quantity: dto.quantity,
+      },
+    });
+  }
+
+  async updateMenuItem(
+    menuItemId: string,
+    userId: string,
+    dto: UpdateMenuItemDto,
+  ) {
+    const menuItem = await this.prisma.menuItem.findUnique({
+      where: { id: menuItemId },
+      include: { menu: true },
+    });
+    if (!menuItem) throw new NotFoundException('Élément de menu non trouvé.');
+    await this.verifyRestaurantOwnership(menuItem.menu.businessId, userId);
+
+    return this.prisma.menuItem.update({
+      where: { id: menuItemId },
+      data: { quantity: dto.quantity },
+    });
+  }
+
+  async removeMenuItem(menuItemId: string, userId: string) {
+    const menuItem = await this.prisma.menuItem.findUnique({
+      where: { id: menuItemId },
+      include: { menu: true },
+    });
+    if (!menuItem) throw new NotFoundException('Élément de menu non trouvé.');
+    await this.verifyRestaurantOwnership(menuItem.menu.businessId, userId);
+
+    await this.prisma.menuItem.delete({
+      where: { id: menuItemId },
+    });
+
+    return { message: 'Élément de menu supprimé avec succès.' };
   }
 }

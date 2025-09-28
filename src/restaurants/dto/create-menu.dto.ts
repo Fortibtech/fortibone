@@ -41,6 +41,10 @@ export class CreateMenuDto {
   @IsPositive()
   price: number;
 
+  @ApiProperty({ example: true })
+  @IsOptional()
+  isActive: boolean = true;
+
   @ApiProperty({ type: [MenuItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
