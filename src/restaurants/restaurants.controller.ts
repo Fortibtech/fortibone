@@ -36,7 +36,7 @@ import {
 import { User } from '@prisma/client';
 
 @ApiTags('Restaurants')
-@Controller('businesses/:businessId') // Changement du préfixe du contrôleur pour plus de clarté
+@Controller('restaurants/:businessId') // Changement du préfixe du contrôleur pour plus de clarté
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RestaurantsController {
