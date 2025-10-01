@@ -50,7 +50,7 @@ export class PaymentTransactionResponseDto {
   @ApiProperty({ enum: PaymentStatus })
   status: PaymentStatus;
 
-  @ApiPropertyOptional({ type: 'object' })
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
   metadata?: Prisma.JsonValue;
 
   @ApiProperty()

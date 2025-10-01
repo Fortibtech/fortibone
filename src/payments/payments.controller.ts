@@ -89,12 +89,10 @@ export class PaymentsController {
     if (!providerEnum) {
       throw new BadRequestException('Fournisseur de paiement non reconnu.');
     }
-    const signature =
-      headers['stripe-signature'] || headers['x-mvola-signature']; // Adapter selon les headers réels
+    // const signature =  headers['stripe-signature'] || headers['x-mvola-signature']; // Adapter selon les headers réels
     return this.paymentsService.processWebhook(
       providerEnum,
       payload,
-      signature,
       headers,
     );
   }
