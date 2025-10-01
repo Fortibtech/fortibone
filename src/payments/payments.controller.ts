@@ -1,4 +1,4 @@
-// src/payments.controller.ts
+// src/payments/payments.controller.ts
 import {
   Body,
   Controller,
@@ -19,66 +19,35 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Assurez-vous du bon chemin
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PaymentMethodEnum, PaymentStatus, User } from '@prisma/client';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ConfirmManualPaymentDto } from './dto/confirm-manual-payment.dto';
 import { RefundOrderDto } from './dto/refund-order.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 
+// Importer les DTOs de réponse
+import {
+  PaymentIntentResponseDto,
+  PaginatedTransactionsResponseDto,
+} from './dto/payment-responses.dto';
+import { OrderResponseDto } from 'src/orders/dto/order-responses.dto';
+
 @ApiTags('Payments')
-@Controller('payments') // Le contrôleur est maintenant préfixé par ses méthodes pour plus de flexibilité
+@Controller() // Préfixe appliqué au niveau des méthodes
 export class PaymentsController {
-  constructor(
-    private readonly paymentsService: PaymentsService,
-    // Nous n'avons plus besoin d'OrdersService directement ici car PaymentsService gère l'orchestration
-  ) {}
-
-  @Post('/webhook/:provider')
-  @ApiOperation({
-    summary: 'Endpoint public pour les webhooks des fournisseurs de paiement',
-    description:
-      'Ce endpoint reçoit les notifications de succès/échec de paiement des fournisseurs. Il NE DOIT PAS être protégé par un JwtAuthGuard.',
-  })
-  @ApiResponse({ status: 200, description: 'Webhook traité avec succès.' })
-  @ApiResponse({
-    status: 400,
-    description: 'Signature invalide ou payload de webhook malformé.',
-  })
-  // Ne pas utiliser JwtAuthGuard ici, les webhooks ont leur propre mécanisme de sécurité (signature)
-  async handleWebhook(
-    @Param('provider') provider: string,
-    @Headers() headers: Record<string, string>, // Collecter TOUS les headers
-
-    @Body() payload?: any,
-  ) {
-    const providerEnum = PaymentMethodEnum[provider.toUpperCase()];
-    if (!providerEnum) {
-      throw new BadRequestException('Fournisseur de paiement non reconnu.');
-    }
-    // Le body du webhook Stripe arrive souvent comme une chaîne de caractères brute.
-    // Il faut le passer tel quel au service pour que Stripe.webhooks.constructEvent puisse le parser.
-    // Pour Mvola, le payload est généralement déjà un objet JSON.
-    const rawBody =
-      providerEnum === PaymentMethodEnum.STRIPE
-        ? JSON.stringify(payload)
-        : payload;
-
-    // Le service se chargera de récupérer la bonne signature dans l'objet 'headers'
-    // et de vérifier la validité du payload.
-    return this.paymentsService.processWebhook(providerEnum, rawBody, headers);
-  }
+  constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('orders/:orderId/pay')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Initier un paiement pour une commande',
-    description:
-      "Crée une intention de paiement avec le fournisseur spécifié. Pour Stripe, si un `paymentMethodId` est fourni dans `metadata`, la transaction tentera d'être confirmée automatiquement.",
+    description: 'Crée une intention de paiement avec le fournisseur spécifié.',
   })
   @ApiResponse({
-    status: 200,
+    status: 201,
+    type: PaymentIntentResponseDto,
     description: 'Intention de paiement créée avec succès.',
   })
   @ApiResponse({
@@ -86,7 +55,6 @@ export class PaymentsController {
     description:
       'Commande non trouvée ou non éligible au paiement, ou méthode non configurée.',
   })
-  @ApiResponse({ status: 401, description: 'Non autorisé.' })
   @ApiResponse({ status: 403, description: 'Forbidden.' })
   async initiatePayment(
     @Param('orderId') orderId: string,
@@ -101,21 +69,49 @@ export class PaymentsController {
     );
   }
 
+  @Post('payments/webhook/:provider')
+  @ApiOperation({
+    summary: 'Endpoint public pour les webhooks des fournisseurs de paiement',
+    description:
+      'Ce endpoint reçoit les notifications de succès/échec de paiement des fournisseurs. Il NE DOIT PAS être protégé par un JwtAuthGuard.',
+  })
+  @ApiResponse({ status: 200, description: 'Webhook traité avec succès.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Signature invalide ou payload de webhook malformé.',
+  })
+  async handleWebhook(
+    @Param('provider') provider: string,
+    @Headers() headers: Record<string, string>,
+    @Body() payload: any,
+  ) {
+    const providerEnum = PaymentMethodEnum[provider.toUpperCase()];
+    if (!providerEnum) {
+      throw new BadRequestException('Fournisseur de paiement non reconnu.');
+    }
+    const signature =
+      headers['stripe-signature'] || headers['x-mvola-signature']; // Adapter selon les headers réels
+    return this.paymentsService.processWebhook(
+      providerEnum,
+      payload,
+      signature,
+      headers,
+    );
+  }
+
   @Post('orders/:orderId/confirm-manual-payment')
-  @UseGuards(JwtAuthGuard) // L'utilisateur doit être connecté pour effectuer cette action
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  // Utilise BusinessAdminGuard pour s'assurer que l'utilisateur est propriétaire/admin de l'entreprise associée à la commande
-  // Note: BusinessAdminGuard a besoin de l'ID de l'entreprise dans params.id, donc nous allons l'adapter ou créer un OrderAdminGuard.
-  // Pour l'instant, on se base sur la vérification dans le service.
-  // @UseGuards(BusinessAdminGuard) // Potentiellement un guard plus générique 'OrderAdminGuard' ou la logique directement dans le service.
   @ApiOperation({
     summary: 'Confirmer manuellement un paiement pour une commande',
     description:
-      "Confirme qu'un paiement hors ligne (espèces, virement) a été reçu. Nécessite des privilèges Admin ou Propriétaire de l'entreprise.",
+      "Confirme qu'un paiement hors ligne a été reçu. Nécessite des privilèges Admin ou Propriétaire.",
   })
   @ApiResponse({
     status: 200,
-    description: 'Paiement manuel confirmé avec succès.',
+    type: OrderResponseDto,
+    description:
+      'Paiement manuel confirmé avec succès et commande mise à jour.',
   })
   @ApiResponse({
     status: 400,
@@ -131,17 +127,17 @@ export class PaymentsController {
   }
 
   @Post('orders/:orderId/refund')
-  @UseGuards(JwtAuthGuard) // L'utilisateur doit être connecté pour demander un remboursement
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  // @UseGuards(BusinessAdminGuard) // Comme ci-dessus, nécessite un guard adapté
   @ApiOperation({
     summary: 'Rembourser une commande',
     description:
-      "Initie un remboursement pour une commande. Nécessite des privilèges Admin ou Propriétaire de l'entreprise.",
+      'Initie un remboursement pour une commande. Nécessite des privilèges Admin ou Propriétaire.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Remboursement initié avec succès.',
+    type: OrderResponseDto,
+    description: 'Remboursement initié avec succès et commande mise à jour.',
   })
   @ApiResponse({
     status: 400,
@@ -156,16 +152,13 @@ export class PaymentsController {
     return this.paymentsService.refundOrder(orderId, req.user, dto.amount);
   }
 
-  @Get('my-transactions')
+  @Get('payments/my-transactions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      "Lister l'historique de toutes les transactions de paiement de l'utilisateur connecté (avec filtres et pagination)",
-    description:
-      'Permet à un client de voir toutes les tentatives de paiement associées à ses commandes.',
+      "Lister l'historique de toutes les transactions de paiement de l'utilisateur connecté",
   })
-  // Ajoutez les @ApiQuery pour tous les champs du QueryTransactionsDto
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'method', required: false, enum: PaymentMethodEnum })
   @ApiQuery({ name: 'status', required: false, enum: PaymentStatus })
@@ -176,6 +169,11 @@ export class PaymentsController {
   @ApiQuery({ name: 'maxAmount', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    type: PaginatedTransactionsResponseDto,
+    description: "Liste paginée des transactions de l'utilisateur.",
+  })
   async findMyTransactions(
     @Request() req: { user: User },
     @Query() dto: QueryTransactionsDto,
@@ -188,11 +186,8 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      "Lister l'historique des transactions de paiement pour une entreprise (Owner requis, avec filtres et pagination)",
-    description:
-      "Permet à un propriétaire d'entreprise de voir toutes les transactions de paiement traitées pour son entreprise.",
+      "Lister l'historique des transactions de paiement pour une entreprise (Owner requis)",
   })
-  // Ajoutez les @ApiQuery pour tous les champs du QueryTransactionsDto
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'method', required: false, enum: PaymentMethodEnum })
   @ApiQuery({ name: 'status', required: false, enum: PaymentStatus })
@@ -203,6 +198,12 @@ export class PaymentsController {
   @ApiQuery({ name: 'maxAmount', required: false, type: Number })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    type: PaginatedTransactionsResponseDto,
+    description: "Liste paginée des transactions de l'entreprise.",
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
   async findBusinessTransactions(
     @Param('businessId') businessId: string,
     @Request() req: { user: User },
