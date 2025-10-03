@@ -14,7 +14,7 @@ export class BusinessAdminGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    const businessId = request.params.id;
+    const businessId = request.params.id || request.params.businessId;
 
     if (!user || !businessId) {
       return false;

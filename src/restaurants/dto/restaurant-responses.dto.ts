@@ -21,7 +21,7 @@ export class RestaurantTableResponseDto {
 }
 
 // DTO pour un élément de menu (MenuItem) dans une réponse
-class MenuItemResponseDto {
+export class MenuItemResponseDto {
   @ApiProperty()
   id: string;
 

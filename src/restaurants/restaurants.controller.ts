@@ -27,11 +27,11 @@ import { UpdateMenuDto } from './dto/update-menu.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { BusinessAdminGuard } from 'src/business/guard/business-admin.guard';
 import { AddMenuItemDto } from './dto/add-menu-item.dto';
-
 // Importer les DTOs de réponse
 import {
   MenuResponseDto,
   RestaurantTableResponseDto,
+  MenuItemResponseDto,
 } from './dto/restaurant-responses.dto';
 import { User } from '@prisma/client';
 
@@ -79,6 +79,8 @@ export class RestaurantsController {
     description: 'La table a été mise à jour.',
   })
   updateTable(
+    @Param('businessId') businessId: string,
+
     @Param('tableId') tableId: string,
     @Request() req: { user: User },
     @Body() dto: UpdateTableDto,
@@ -94,6 +96,8 @@ export class RestaurantsController {
     description: 'La table a été supprimée avec succès.',
   })
   removeTable(
+    @Param('businessId') businessId: string,
+
     @Param('tableId') tableId: string,
     @Request() req: { user: User },
   ) {
@@ -173,6 +177,8 @@ export class RestaurantsController {
     description: 'Le menu a été mis à jour.',
   })
   updateMenu(
+    @Param('businessId') businessId: string,
+
     @Param('menuId') menuId: string,
     @Request() req: { user: User },
     @Body() dto: UpdateMenuDto,
@@ -187,7 +193,11 @@ export class RestaurantsController {
     status: 200,
     description: 'Le menu a été supprimé avec succès.',
   })
-  removeMenu(@Param('menuId') menuId: string, @Request() req: { user: User }) {
+  removeMenu(
+    @Param('businessId') businessId: string,
+    @Param('menuId') menuId: string,
+    @Request() req: { user: User },
+  ) {
     return this.restaurantsService.removeMenu(menuId, req.user.id);
   }
 
@@ -197,10 +207,12 @@ export class RestaurantsController {
   @ApiOperation({ summary: 'Ajouter un plat à un menu (Admin/Owner requis)' })
   @ApiResponse({
     status: 201,
-    /* type: MenuItemResponseDto */ description:
-      "L'élément a été ajouté au menu.",
+    type: MenuItemResponseDto,
+    description: "L'élément a été ajouté au menu.",
   })
   addMenuItem(
+    @Param('businessId') businessId: string,
+
     @Param('menuId') menuId: string,
     @Request() req: { user: User },
     @Body() dto: AddMenuItemDto,
@@ -216,10 +228,12 @@ export class RestaurantsController {
   })
   @ApiResponse({
     status: 200,
-    /* type: MenuItemResponseDto */ description:
-      "L'élément de menu a été mis à jour.",
+    type: MenuItemResponseDto,
+    description: "L'élément de menu a été mis à jour.",
   })
   updateMenuItem(
+    @Param('businessId') businessId: string,
+    @Param('menuId') menuId: string,
     @Param('itemId') itemId: string,
     @Request() req: { user: User },
     @Body() dto: UpdateMenuItemDto,
@@ -235,6 +249,8 @@ export class RestaurantsController {
     description: "L'élément de menu a été supprimé avec succès.",
   })
   removeMenuItem(
+    @Param('businessId') businessId: string,
+    @Param('menuId') menuId: string,
     @Param('itemId') itemId: string,
     @Request() req: { user: User },
   ) {
