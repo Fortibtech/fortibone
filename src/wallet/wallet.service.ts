@@ -1,0 +1,162 @@
+// src/wallet/wallet.service.ts
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  Prisma,
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from '@prisma/client';
+import { CurrenciesService } from 'src/currencies/currencies.service';
+
+// Interface pour les paramètres des méthodes de crédit/débit, pour plus de clarté
+interface WalletMovementParams {
+  walletId: string;
+  amount: number;
+  description: string;
+  relatedOrderId?: string;
+  relatedPaymentTransactionId?: string;
+  tx: Omit<
+    PrismaClient,
+    '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+  >; // Type pour le client de transaction Prisma
+}
+
+@Injectable()
+export class WalletService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currenciesService: CurrenciesService, // Pour la devise par défaut
+  ) {}
+
+  /**
+   * Trouve le portefeuille d'un utilisateur. Si le portefeuille n'existe pas,
+   * il est créé automatiquement avec la devise par défaut (EUR).
+   * @param userId - L'ID de l'utilisateur.
+   * @returns Le portefeuille de l'utilisateur.
+   */
+  async findOrCreateUserWallet(userId: string) {
+    let wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      // Création automatique si le portefeuille n'existe pas
+      const defaultCurrency = await this.currenciesService.findByCode('EUR');
+      if (!defaultCurrency) {
+        throw new InternalServerErrorException(
+          "La devise par défaut (EUR) n'a pas pu être trouvée pour créer le portefeuille.",
+        );
+      }
+      wallet = await this.prisma.wallet.create({
+        data: {
+          userId,
+          currencyId: defaultCurrency.id,
+        },
+      });
+    }
+
+    return wallet;
+  }
+
+  /**
+   * Crédite le portefeuille d'un utilisateur de manière atomique.
+   * Crée une transaction et incrémente le solde.
+   * @param params - Les paramètres de l'opération de crédit.
+   * @returns Le portefeuille mis à jour.
+   */
+  async credit(params: WalletMovementParams) {
+    const {
+      walletId,
+      amount,
+      description,
+      relatedOrderId,
+      relatedPaymentTransactionId,
+      tx,
+    } = params;
+
+    if (amount <= 0) {
+      throw new BadRequestException('Le montant à créditer doit être positif.');
+    }
+
+    // 1. Créer la transaction de portefeuille
+    await tx.walletTransaction.create({
+      data: {
+        walletId,
+        type: WalletTransactionType.DEPOSIT, // Ou REFUND, à adapter selon le contexte
+        amount: new Prisma.Decimal(amount),
+        status: WalletTransactionStatus.COMPLETED,
+        description,
+        relatedOrderId,
+        relatedPaymentTransactionId,
+      },
+    });
+
+    // 2. Mettre à jour le solde du portefeuille
+    return tx.wallet.update({
+      where: { id: walletId },
+      data: {
+        balance: {
+          increment: new Prisma.Decimal(amount),
+        },
+      },
+    });
+  }
+
+  /**
+   * Débite le portefeuille d'un utilisateur de manière atomique.
+   * Vérifie le solde, crée une transaction et décrémente le solde.
+   * @param params - Les paramètres de l'opération de débit.
+   * @returns Le portefeuille mis à jour.
+   */
+  async debit(params: WalletMovementParams) {
+    const {
+      walletId,
+      amount,
+      description,
+      relatedOrderId,
+      relatedPaymentTransactionId,
+      tx,
+    } = params;
+
+    if (amount <= 0) {
+      throw new BadRequestException('Le montant à débiter doit être positif.');
+    }
+
+    // 1. Vérification de solde (verrouillage au niveau de la ligne en transaction)
+    const wallet = await tx.wallet.findUnique({
+      where: { id: walletId },
+    });
+
+    if (!wallet || wallet.balance.toNumber() < amount) {
+      throw new BadRequestException('Solde du portefeuille insuffisant.');
+    }
+
+    // 2. Créer la transaction de portefeuille
+    await tx.walletTransaction.create({
+      data: {
+        walletId,
+        type: WalletTransactionType.PAYMENT, // Ou WITHDRAWAL, à adapter
+        amount: new Prisma.Decimal(-amount), // Montant négatif pour un débit
+        status: WalletTransactionStatus.COMPLETED,
+        description,
+        relatedOrderId,
+        relatedPaymentTransactionId,
+      },
+    });
+
+    // 3. Mettre à jour le solde du portefeuille
+    return tx.wallet.update({
+      where: { id: walletId },
+      data: {
+        balance: {
+          decrement: new Prisma.Decimal(amount),
+        },
+      },
+    });
+  }
+}

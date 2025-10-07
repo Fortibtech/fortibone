@@ -1,0 +1,40 @@
+// src/wallet/dto/wallet-responses.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Prisma, WalletTransactionStatus, WalletTransactionType } from '@prisma/client';
+
+export class WalletResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty({ type: 'number', description: 'Solde actuel du portefeuille' })
+  balance: Prisma.Decimal;
+
+  @ApiProperty()
+  currencyId: string;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
+export class WalletTransactionResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty({ enum: WalletTransactionType })
+  type: WalletTransactionType;
+
+  @ApiProperty({ type: 'number', description: 'Montant de la transaction (positif pour crédit, négatif pour débit)' })
+  amount: Prisma.Decimal;
+
+  @ApiProperty({ enum: WalletTransactionStatus })
+  status: WalletTransactionStatus;
+
+  @ApiProperty()
+  description: string;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  @ApiProperty({ required: false })
+  relatedOrderId?: string;
+}
