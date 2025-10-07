@@ -70,7 +70,8 @@ model Currency {
   symbol       String // ex: "€", "$"
   exchangeRate Float  @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
 
-  businesses Business[]
+  businesses   Business[]
+  wallets      Wallet[]
 }
 
 model Business {
@@ -381,6 +382,7 @@ model Order {
 
   lines          OrderLine[]
   stockMovements StockMovement[]
+  walletTransactions WalletTransaction[]
 }
 
 model OrderLine {
@@ -534,6 +536,7 @@ enum OrderStatus {
 enum PaymentMethodEnum {
   STRIPE
   MVOLA // Exemple pour le paiement local Comorien
+  WALLET
   MANUAL
 }
 

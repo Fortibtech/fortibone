@@ -8,10 +8,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   Prisma,
+  PrismaClient,
   WalletTransactionStatus,
   WalletTransactionType,
 } from '@prisma/client';
 import { CurrenciesService } from 'src/currencies/currencies.service';
+import { PaymentsService } from 'src/payments/payments.service';
+import { DepositDto } from './dto/deposit.dto';
 
 // Interface pour les paramètres des méthodes de crédit/débit, pour plus de clarté
 interface WalletMovementParams {
@@ -31,6 +34,7 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly currenciesService: CurrenciesService, // Pour la devise par défaut
+    private readonly paymentsService: PaymentsService, // Pour initier les paiements externes
   ) {}
 
   /**
@@ -137,7 +141,7 @@ export class WalletService {
     }
 
     // 2. Créer la transaction de portefeuille
-    await tx.walletTransaction.create({
+   const transaction = await tx.walletTransaction.create({
       data: {
         walletId,
         type: WalletTransactionType.PAYMENT, // Ou WITHDRAWAL, à adapter
@@ -150,7 +154,7 @@ export class WalletService {
     });
 
     // 3. Mettre à jour le solde du portefeuille
-    return tx.wallet.update({
+    const finalWallet = tx.wallet.update({
       where: { id: walletId },
       data: {
         balance: {
@@ -158,6 +162,7 @@ export class WalletService {
         },
       },
     });
+    return {wallet: finalWallet, transaction };
   }
 
   // --- NOUVELLE MÉTHODE POUR INITIER UN DÉPÔT ---

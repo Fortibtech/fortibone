@@ -14,5 +14,5 @@ export class DepositDto {
     description: 'La méthode de paiement externe à utiliser pour le dépôt',
   })
   @IsEnum(PaymentMethodEnum)
-  method: PaymentMethodEnum.STRIPE | PaymentMethodEnum.MVOLA;
+  method: PaymentMethodEnum;
 }

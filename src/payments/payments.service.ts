@@ -5,7 +5,6 @@ import {
   forwardRef,
   Inject,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,13 +14,12 @@ import {
   PaymentMethodEnum,
   PaymentStatus,
   Prisma,
-  ProfileType,
+  WalletTransactionStatus,
   User,
 } from '@prisma/client';
 import {
   PaymentProvider,
   PaymentIntentResult,
-  RefundResult,
   WebhookResult,
 } from './interfaces/payment-provider.interface';
 import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin du service des commandes
@@ -36,6 +34,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     @Inject('PAYMENT_PROVIDERS_MAP')
     paymentProvidersMap: Map<PaymentMethodEnum, PaymentProvider>,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
     @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
     private readonly walletService: WalletService,
@@ -251,7 +250,7 @@ export class PaymentsService {
         await this.walletService.credit({
           walletId: walletTx.walletId,
           amount: walletTx.amount.toNumber(),
-          description: `Dépôt réussi via ${walletTx.provider || webhookResult.provider}`,
+          description: `Dépôt réussi via ${webhookResult.provider}`,
           relatedPaymentTransactionId: webhookResult.transactionId,
           tx,
         });

@@ -15,7 +15,7 @@ import {
   OrderType,
   OrderStatus,
   PaymentMethodEnum,
-  PaymentTransaction,
+  WalletTransaction,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
 import { QueryOrdersDto } from './dto/query-orders.dto';
@@ -77,8 +77,8 @@ export class OrdersService {
       // --- NOUVELLE LOGIQUE POUR LE PAIEMENT PAR PORTEFEUILLE ---
       let orderStatus: OrderStatus = OrderStatus.PENDING_PAYMENT;
       let paymentMethod: PaymentMethodEnum | null = null;
-      let transactionId: string | null = null;
-      let paymentTransaction: PaymentTransaction | null = null;
+      let transactionId: string | null | undefined = null;
+      let paymentTransaction: WalletTransaction | null = null;
 
       if (dto.useWallet && dto.type === OrderType.SALE) {
         const wallet = await this.walletService.findOrCreateUserWallet(user.id);
@@ -89,16 +89,17 @@ export class OrdersService {
         }
 
         // Débiter le portefeuille
-        paymentTransaction = await this.walletService.debit({
+        const {transaction} = await this.walletService.debit({
           walletId: wallet.id,
           amount: totalAmount,
           description: `Paiement pour la commande #${`ORD-${Date.now()}`}`, // Utiliser un placeholder
           tx,
         });
+        paymentTransaction = transaction
 
         orderStatus = OrderStatus.PAID; // La commande est payée immédiatement
         paymentMethod = PaymentMethodEnum.WALLET; // Le moyen de paiement est le portefeuille
-        transactionId = paymentTransaction.id;
+        transactionId = paymentTransaction?.id; // Enregistrer l'ID de la transaction de paiement
       }
 
       // 2. Créer l'entrée principale de la commande (Order)
