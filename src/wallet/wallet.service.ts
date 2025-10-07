@@ -15,6 +15,7 @@ import {
 import { CurrenciesService } from 'src/currencies/currencies.service';
 import { PaymentsService } from 'src/payments/payments.service';
 import { DepositDto } from './dto/deposit.dto';
+import { QueryWalletTransactionsDto } from './dto/query-wallet-transactions.dto';
 
 // Interface pour les paramètres des méthodes de crédit/débit, pour plus de clarté
 interface WalletMovementParams {
@@ -234,5 +235,71 @@ export class WalletService {
       });
       throw error; // Propager l'erreur
     }
+  }
+
+
+   /**
+   * Récupère l'historique des transactions du portefeuille d'un utilisateur,
+   * avec des options de filtrage et de pagination.
+   * @param userId - L'ID de l'utilisateur.
+   * @param dto - Les paramètres de requête pour le filtrage et la pagination.
+   * @returns Une liste paginée de transactions de portefeuille.
+   */
+  async findUserTransactions(userId: string, dto: QueryWalletTransactionsDto) {
+    const { page = 1, limit = 10, search, type, status, startDate, endDate } = dto;
+    const skip = (page - 1) * limit;
+
+    // S'assurer que le portefeuille de l'utilisateur existe
+    const wallet = await this.findOrCreateUserWallet(userId);
+
+    // Construction dynamique de la clause WHERE
+    const where: Prisma.WalletTransactionWhereInput = {
+      walletId: wallet.id,
+      type,
+      status,
+    };
+
+    if (search) {
+      where.description = {
+        contains: search,
+        mode: 'insensitive',
+      };
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    // Exécuter les requêtes de comptage et de récupération en parallèle
+    const [transactions, total] = await this.prisma.$transaction([
+      this.prisma.walletTransaction.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        // Inclure les relations pertinentes pour l'affichage
+        include: {
+          relatedOrder: {
+            select: {
+              id: true,
+              orderNumber: true,
+            },
+          },
+        },
+      }),
+      this.prisma.walletTransaction.count({ where }),
+    ]);
+
+    return {
+      data: transactions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }
