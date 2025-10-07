@@ -22,9 +22,11 @@ import {
   PaymentProvider,
   PaymentIntentResult,
   RefundResult,
+  WebhookResult,
 } from './interfaces/payment-provider.interface';
 import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin du service des commandes
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
+import { WalletService } from 'src/wallet/wallet.service';
 
 @Injectable()
 export class PaymentsService {
@@ -35,6 +37,8 @@ export class PaymentsService {
     @Inject('PAYMENT_PROVIDERS_MAP')
     paymentProvidersMap: Map<PaymentMethodEnum, PaymentProvider>,
     private readonly ordersService: OrdersService,
+    @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
+    private readonly walletService: WalletService,
   ) {
     this.paymentProviders = paymentProvidersMap;
   }
@@ -165,48 +169,117 @@ export class PaymentsService {
     // Pour l'instant, c'est un placeholder.
     console.log(`Webhook received for ${providerMethod}`, payload);
     const provider = this.getProvider(providerMethod);
-    const result = await provider.handleWebhook(payload, headers);
+    const webhookResult = await provider.handleWebhook(payload, headers);
+    // --- GESTION DU CONTEXTE ---
+    if (webhookResult.metadata?.context === 'WALLET_DEPOSIT') {
+      return this.processWalletDepositWebhook(webhookResult);
+    } else {
+      return this.prisma.$transaction(async (tx) => {
+        const transaction = await tx.paymentTransaction.findUnique({
+          where: { providerTransactionId: webhookResult.transactionId },
+        });
+        if (!transaction) {
+          throw new NotFoundException(
+            `Transaction de paiement ${webhookResult.transactionId} non trouvée.`,
+          );
+        }
+
+        // Mettre à jour la transaction
+        await tx.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: webhookResult.status,
+            metadata: webhookResult.metadata,
+          },
+        });
+
+        // Mettre à jour le statut de la commande si le paiement est un succès
+        if (webhookResult.status === 'SUCCESS') {
+          return this.ordersService.updateOrderStatusLogic(
+            tx,
+            webhookResult.orderId,
+            'PAID',
+            transaction.id,
+          );
+        } else if (webhookResult.status === 'FAILED') {
+          return this.ordersService.updateOrderStatusLogic(
+            tx,
+            webhookResult.orderId,
+            'PAYMENT_FAILED',
+          );
+        } else if (webhookResult.status === 'REFUNDED') {
+          return this.ordersService.updateOrderStatusLogic(
+            tx,
+            webhookResult.orderId,
+            'REFUNDED',
+          );
+        }
+        return {
+          message: 'Webhook processed, but no order status change triggered.',
+        };
+      });
+    }
+  }
+
+  // --- NOUVELLE MÉTHODE PRIVÉE POUR LE WEBHOOK DE DÉPÔT ---
+  private async processWalletDepositWebhook(webhookResult: WebhookResult) {
+    const walletTransactionId = webhookResult.metadata.walletTransactionId;
+    if (!walletTransactionId) {
+      throw new BadRequestException(
+        'ID de transaction de portefeuille manquant dans les métadonnées du webhook.',
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.paymentTransaction.findUnique({
-        where: { providerTransactionId: result.transactionId },
+      const walletTx = await tx.walletTransaction.findUnique({
+        where: { id: walletTransactionId },
       });
-      if (!transaction) {
+
+      if (!walletTx)
         throw new NotFoundException(
-          `Transaction de paiement ${result.transactionId} non trouvée.`,
+          `Transaction de portefeuille ${walletTransactionId} non trouvée.`,
         );
+      if (walletTx.status === 'COMPLETED') {
+        console.log(
+          `Webhook pour la transaction de portefeuille ${walletTransactionId} déjà traitée. Ignoré.`,
+        );
+        return { message: 'Webhook déjà traité.' };
       }
 
-      // Mettre à jour la transaction
-      await tx.paymentTransaction.update({
-        where: { id: transaction.id },
-        data: { status: result.status, metadata: result.metadata },
-      });
+      if (webhookResult.status === PaymentStatus.SUCCESS) {
+        // Le dépôt a réussi : créditer le portefeuille
+        await this.walletService.credit({
+          walletId: walletTx.walletId,
+          amount: walletTx.amount.toNumber(),
+          description: `Dépôt réussi via ${walletTx.provider || webhookResult.provider}`,
+          relatedPaymentTransactionId: webhookResult.transactionId,
+          tx,
+        });
 
-      // Mettre à jour le statut de la commande si le paiement est un succès
-      if (result.status === 'SUCCESS') {
-        return this.ordersService.updateOrderStatusLogic(
-          tx,
-          result.orderId,
-          'PAID',
-          transaction.id,
-        );
-      } else if (result.status === 'FAILED') {
-        return this.ordersService.updateOrderStatusLogic(
-          tx,
-          result.orderId,
-          'PAYMENT_FAILED',
-        );
-      } else if (result.status === 'REFUNDED') {
-        return this.ordersService.updateOrderStatusLogic(
-          tx,
-          result.orderId,
-          'REFUNDED',
-        );
+        // Mettre à jour notre transaction de portefeuille
+        await tx.walletTransaction.update({
+          where: { id: walletTransactionId },
+          data: { status: WalletTransactionStatus.COMPLETED },
+        });
+
+        // Mettre à jour la commande "fictive"
+        await tx.order.update({
+          where: { id: webhookResult.orderId },
+          data: { status: OrderStatus.PAID },
+        });
+      } else if (webhookResult.status === PaymentStatus.FAILED) {
+        // Le dépôt a échoué
+        await tx.walletTransaction.update({
+          where: { id: walletTransactionId },
+          data: { status: WalletTransactionStatus.FAILED },
+        });
+        await tx.order.update({
+          where: { id: webhookResult.orderId },
+          data: { status: OrderStatus.PAYMENT_FAILED },
+        });
       }
-      return {
-        message: 'Webhook processed, but no order status change triggered.',
-      };
+
+      return { message: 'Webhook de dépôt traité.' };
     });
   }
 

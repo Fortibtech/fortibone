@@ -159,4 +159,75 @@ export class WalletService {
       },
     });
   }
+
+  // --- NOUVELLE MÉTHODE POUR INITIER UN DÉPÔT ---
+  async initiateDeposit(userId: string, dto: DepositDto) {
+    const { amount, method } = dto;
+    const wallet = await this.findOrCreateUserWallet(userId);
+
+    // 1. Démarrer une transaction Prisma pour créer la transaction de portefeuille en attente
+    const walletTransaction = await this.prisma.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: WalletTransactionType.DEPOSIT,
+        amount: new Prisma.Decimal(amount),
+        status: WalletTransactionStatus.PENDING,
+        description: `Dépôt en attente via ${method}`,
+      },
+    });
+
+    // 2. Créer une commande "fictive" pour le paiement, car notre PaymentsModule est basé sur les commandes
+    // C'est une approche robuste pour réutiliser la logique de paiement existante.
+    // On lie le paiement à l'entreprise FortiBone elle-même (à créer dans le seed si besoin).
+    const fortiboneBusiness = await this.prisma.business.findFirst({
+      // Trouver une entreprise "interne" qui représente la plateforme
+      where: { name: 'FortiBone Platform' }, // Assurez-vous que cette entreprise existe
+    });
+    if (!fortiboneBusiness) {
+      throw new InternalServerErrorException(
+        'Entreprise de la plateforme non configurée pour les dépôts.',
+      );
+    }
+
+    const depositOrder = await this.prisma.order.create({
+      data: {
+        orderNumber: `DEPOSIT-${walletTransaction.id}`,
+        type: 'SALE', // Un dépôt est une "vente" de crédit de portefeuille
+        status: 'PENDING_PAYMENT',
+        totalAmount: new Prisma.Decimal(amount),
+        businessId: fortiboneBusiness.id,
+        customerId: userId,
+      },
+    });
+
+    // 3. Appeler le PaymentsService pour créer l'intention de paiement externe
+    try {
+      const paymentIntentResult = await this.paymentsService.createPayment(
+        depositOrder.id,
+        { id: userId } as any, // Passer l'objet User simplifié
+        method,
+        {
+          context: 'WALLET_DEPOSIT', // Le contexte CRUCIAL pour le webhook
+          walletTransactionId: walletTransaction.id,
+        },
+      );
+
+      // Lier la transaction de paiement externe à notre transaction de portefeuille
+      await this.prisma.walletTransaction.update({
+        where: { id: walletTransaction.id },
+        data: {
+          relatedPaymentTransactionId: paymentIntentResult.transactionId,
+        },
+      });
+
+      return paymentIntentResult;
+    } catch (error) {
+      // Si l'initiation du paiement externe échoue, annuler la transaction de portefeuille
+      await this.prisma.walletTransaction.update({
+        where: { id: walletTransaction.id },
+        data: { status: WalletTransactionStatus.FAILED },
+      });
+      throw error; // Propager l'erreur
+    }
+  }
 }

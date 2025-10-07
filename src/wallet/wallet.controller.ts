@@ -1,5 +1,12 @@
 // src/wallet/wallet.controller.ts
-import { Controller, Get, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Request,
+  Body,
+  Post,
+} from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import {
   ApiBearerAuth,
@@ -10,6 +17,8 @@ import {
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { WalletResponseDto } from './dto/wallet-responses.dto';
 import { User } from '@prisma/client';
+import { PaymentIntentResponseDto } from 'src/payments/dto/payment-responses.dto';
+import { DepositDto } from './dto/deposit.dto';
 
 @ApiTags('Wallet')
 @Controller('wallet')
@@ -34,5 +43,22 @@ export class WalletController {
     return this.walletService.findOrCreateUserWallet(req.user.id);
   }
 
-  // Les autres endpoints (deposit, withdrawal) viendront dans les phases suivantes
+  @Post('deposit')
+  @ApiOperation({ summary: 'Initier un dépôt pour recharger le portefeuille' })
+  @ApiResponse({
+    status: 201,
+    type: PaymentIntentResponseDto,
+    description:
+      'Intention de paiement créée. Retourne un clientSecret/redirectUrl.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Montant ou méthode de paiement invalide.',
+  })
+  async initiateDeposit(
+    @Request() req: { user: User },
+    @Body() dto: DepositDto,
+  ) {
+    return this.walletService.initiateDeposit(req.user.id, dto);
+  }
 }
