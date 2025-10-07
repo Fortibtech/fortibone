@@ -2,22 +2,34 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { Prisma, User, OrderType, OrderStatus } from '@prisma/client';
+import {
+  Prisma,
+  User,
+  OrderType,
+  OrderStatus,
+  PaymentMethodEnum,
+  PaymentTransaction,
+} from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { WalletService } from 'src/wallet/wallet.service';
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService, // INJECTER
+    @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
+    private readonly walletService: WalletService,
   ) {}
 
   async create(dto: CreateOrderDto, user: User) {
@@ -62,15 +74,45 @@ export class OrdersService {
         });
       }
 
+      // --- NOUVELLE LOGIQUE POUR LE PAIEMENT PAR PORTEFEUILLE ---
+      let orderStatus: OrderStatus = OrderStatus.PENDING_PAYMENT;
+      let paymentMethod: PaymentMethodEnum | null = null;
+      let transactionId: string | null = null;
+      let paymentTransaction: PaymentTransaction | null = null;
+
+      if (dto.useWallet && dto.type === OrderType.SALE) {
+        const wallet = await this.walletService.findOrCreateUserWallet(user.id);
+        if (wallet.balance.toNumber() < totalAmount) {
+          throw new BadRequestException(
+            'Solde du portefeuille insuffisant pour effectuer cet achat.',
+          );
+        }
+
+        // Débiter le portefeuille
+        paymentTransaction = await this.walletService.debit({
+          walletId: wallet.id,
+          amount: totalAmount,
+          description: `Paiement pour la commande #${`ORD-${Date.now()}`}`, // Utiliser un placeholder
+          tx,
+        });
+
+        orderStatus = OrderStatus.PAID; // La commande est payée immédiatement
+        paymentMethod = PaymentMethodEnum.WALLET; // Le moyen de paiement est le portefeuille
+        transactionId = paymentTransaction.id;
+      }
+
       // 2. Créer l'entrée principale de la commande (Order)
       const orderData: Prisma.OrderCreateInput = {
-        orderNumber: `ORD-${Date.now()}`, // Génération simple du numéro de commande
+        orderNumber: `ORD-${Date.now()}`,
         type: dto.type,
+        status: orderStatus, // Utiliser le statut déterminé
         totalAmount,
         notes: dto.notes,
         business: { connect: { id: dto.businessId } },
-        customer: { connect: { id: user.id } }, // Le client est toujours l'utilisateur qui passe l'action
+        customer: { connect: { id: user.id } },
         lines: { create: orderLinesData },
+        paymentMethod: paymentMethod, // Enregistrer la méthode de paiement
+        transactionId: transactionId,
       };
 
       if (dto.type === OrderType.PURCHASE) {
@@ -91,6 +133,17 @@ export class OrdersService {
       }
 
       const order = await tx.order.create({ data: orderData });
+
+      // Mettre à jour la transaction de portefeuille avec le véritable Order ID
+      if (paymentTransaction) {
+        await tx.walletTransaction.update({
+          where: { id: paymentTransaction.id },
+          data: {
+            description: `Paiement pour la commande #${order.orderNumber}`,
+            relatedOrderId: order.id,
+          },
+        });
+      }
 
       // 3. Mettre à jour l'inventaire si c'est une vente (SALE)
       if (dto.type === OrderType.SALE) {

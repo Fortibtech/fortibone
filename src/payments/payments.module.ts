@@ -12,6 +12,7 @@ import { StripeProvider } from './providers/stripe.provider';
 import { PaymentMethodEnum } from '@prisma/client';
 import { OrdersService } from 'src/orders/orders.service';
 import { ManualPaymentProvider } from './providers/manual.provider';
+import { WalletModule } from 'src/wallet/wallet.module';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
@@ -25,6 +26,7 @@ const paymentProviders: Provider[] = [
     ConfigModule,
     HttpModule, // Ajouter HttpModule ici
     forwardRef(() => OrdersModule),
+    forwardRef(() => WalletModule), // AJOUTER
   ],
   providers: [
     PaymentsService,
