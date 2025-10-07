@@ -188,6 +188,7 @@ export class StripeProvider implements PaymentProvider {
           transactionId,
           status: PaymentStatus.PENDING, // Statut par défaut ou à déterminer
           metadata: paymentIntent.metadata,
+          provider: this.method,
         };
     }
 
@@ -201,6 +202,7 @@ export class StripeProvider implements PaymentProvider {
         : undefined,
       currency: paymentIntent.currency,
       metadata: paymentIntent.metadata,
+      provider: this.method,
     };
   }
 

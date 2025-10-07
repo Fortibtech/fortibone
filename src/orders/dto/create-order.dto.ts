@@ -4,6 +4,7 @@ import { OrderType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -78,4 +79,13 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderLineDto)
   lines: OrderLineDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Spécifie si le paiement de la commande doit être effectué via le portefeuille FortiBone.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useWallet?: boolean = false;
 }

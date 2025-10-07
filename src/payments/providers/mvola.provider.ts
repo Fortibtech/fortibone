@@ -279,6 +279,7 @@ export class MvolaProvider implements PaymentProvider {
       amount: parseFloat(mvolaEvent.amount || '0'), // À récupérer si disponible dans le payload réel
       currency: mvolaEvent.currency || 'Ar', // À récupérer si disponible dans le payload réel
       metadata: mvolaEvent.metadata,
+      provider: this.method,
     };
   }
 

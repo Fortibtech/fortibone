@@ -31,6 +31,9 @@ model User {
   // Un 'PARTICULIER' peut aussi devenir membre d'une entreprise.
   profileType ProfileType @default(PARTICULIER)
 
+  wallet Wallet? // Relation 1-1 vers le portefeuille
+
+
   // --- CHAMPS AJOUTÉS POUR LA VÉRIFICATION ET LA RÉINITIALISATION ---
   isEmailVerified             Boolean   @default(false) @map("is_email_verified")
   otp                         String? // One-Time Password pour la vérification email
@@ -67,7 +70,8 @@ model Currency {
   symbol       String // ex: "€", "$"
   exchangeRate Float  @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
 
-  businesses Business[]
+  businesses   Business[]
+  wallets      Wallet[]
 }
 
 model Business {
@@ -378,6 +382,7 @@ model Order {
 
   lines          OrderLine[]
   stockMovements StockMovement[]
+  walletTransactions WalletTransaction[]
 }
 
 model OrderLine {
@@ -404,6 +409,8 @@ model PaymentTransaction {
   createdAt             DateTime          @default(now()) @map("created_at")
   updatedAt             DateTime          @updatedAt @map("updated_at")
 
+  walletTransaction WalletTransaction?
+
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId String @map("order_id")
 }
@@ -419,6 +426,51 @@ model Review {
   productId String  @map("product_id")
   author    User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId  String  @map("author_id")
+}
+
+
+// ----------------------------------------
+// ---      MODÈLES PORTEFEUILLE (WALLET)   ---
+// ----------------------------------------
+
+model Wallet {
+  id         String   @id @default(cuid())
+  balance    Decimal  @default(0.0) // Utiliser Decimal pour la précision monétaire
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relation 1-1 unique avec l'utilisateur
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String   @unique @map("user_id")
+
+  // Devise du portefeuille
+  currency   Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict)
+  currencyId String   @map("currency_id")
+
+  // Historique des transactions
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id        String                @id @default(cuid())
+  type      WalletTransactionType // DEPOSIT, WITHDRAWAL, PAYMENT, REFUND
+  amount    Decimal               // Positif pour crédit, négatif pour débit
+  status    WalletTransactionStatus @default(PENDING)
+  description String
+
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  // Relations pour la traçabilité
+  wallet    Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  walletId  String                @map("wallet_id")
+  
+  // Pour lier une transaction de portefeuille à une commande (ex: paiement d'une commande)
+  relatedOrder    Order?                @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
+  relatedOrderId  String?               @map("related_order_id")
+  
+  // Pour lier à une transaction de paiement externe (ex: dépôt Stripe)
+  relatedPaymentTransaction    PaymentTransaction? @relation(fields: [relatedPaymentTransactionId], references: [id], onDelete: SetNull)
+  relatedPaymentTransactionId  String?             @unique @map("related_payment_transaction_id")
 }
 
 // ----------------------------------------
@@ -484,6 +536,7 @@ enum OrderStatus {
 enum PaymentMethodEnum {
   STRIPE
   MVOLA // Exemple pour le paiement local Comorien
+  WALLET
   MANUAL
 }
 
@@ -527,4 +580,22 @@ enum InvitationStatus {
   PENDING
   ACCEPTED
   EXPIRED
+}
+
+
+// --- NOUVELLES ENUMS POUR LE PORTEFEUILLE ---
+
+enum WalletTransactionType {
+  DEPOSIT    // Dépôt d'argent dans le portefeuille
+  WITHDRAWAL // Retrait d'argent du portefeuille
+  PAYMENT    // Paiement d'une commande via le portefeuille
+  REFUND     // Remboursement d'une commande vers le portefeuille
+  ADJUSTMENT // Ajustement manuel par un admin
+}
+
+enum WalletTransactionStatus {
+  PENDING    // La transaction est initiée mais pas encore complétée (ex: dépôt en attente)
+  COMPLETED  // La transaction a réussi, les fonds sont déplacés
+  FAILED     // La transaction a échoué
+  CANCELLED  // La transaction a été annulée
 }

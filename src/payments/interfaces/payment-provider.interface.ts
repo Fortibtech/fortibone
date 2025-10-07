@@ -24,6 +24,7 @@ export interface WebhookResult {
   amount?: number;
   currency?: string;
   metadata?: any;
+  provider: PaymentMethodEnum;
 }
 
 export interface RefundResult {
