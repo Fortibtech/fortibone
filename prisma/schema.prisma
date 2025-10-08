@@ -411,8 +411,8 @@ model PaymentTransaction {
 
   walletTransaction WalletTransaction?
 
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId String @map("order_id")
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String? @map("order_id")
 }
 
 model Review {

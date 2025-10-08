@@ -47,83 +47,6 @@ export class StripeProvider implements PaymentProvider {
     this.stripe = new Stripe(apiKey);
   }
 
-  async createPaymentIntent(
-    order: any,
-    user: User,
-    tx: PrismaClient,
-    metadata?: any,
-  ): Promise<PaymentIntentResult> {
-    if (!order.business || !order.business.currency) {
-      throw new InternalServerErrorException(
-        "Informations sur la devise de l'entreprise manquantes pour le paiement.",
-      );
-    }
-
-    const { paymentMethodId } = metadata as { paymentMethodId?: string };
-
-    try {
-      const paymentIntentOptions: Stripe.PaymentIntentCreateParams = {
-        amount: order.totalAmount.mul(100).toNumber(),
-        currency: order.business.currency.code.toLowerCase(),
-        metadata: {
-          orderId: order.id,
-          userId: user.id,
-          ...metadata,
-        },
-        description: `Paiement pour la commande #${order.orderNumber} sur FortiBone`,
-        // --- LOGIQUE DE CONFIRMATION AUTOMATIQUE ---
-        confirm: paymentMethodId ? true : false, // Confirmer si un paymentMethodId est fourni
-        payment_method: paymentMethodId, // Lier le PaymentMethod ID à l'intention
-        return_url: paymentMethodId
-          ? `${this.configService.get<string>('APP_BASE_URL')}/payment/return/${order.id}`
-          : undefined, // URL de retour après 3DS Secure (à configurer dans .env)
-        // Autres options comme setup_future_usage: 'off_session' si vous voulez sauvegarder la carte
-      };
-
-      const paymentIntent =
-        await this.stripe.paymentIntents.create(paymentIntentOptions);
-
-      // Déterminer le statut initial de la transaction en fonction de la réponse de Stripe
-      let status: PaymentStatus;
-      let clientSecret: string | null;
-      switch (paymentIntent.status) {
-        case 'requires_action': // Ex: 3D Secure, redirection nécessaire
-        case 'requires_confirmation':
-        case 'requires_payment_method':
-          status = PaymentStatus.PENDING;
-          clientSecret = paymentIntent.client_secret; // Le frontend utilisera ce secret pour gérer l'action
-          break;
-        case 'succeeded':
-          status = PaymentStatus.SUCCESS;
-          clientSecret = paymentIntent.client_secret;
-          break;
-        case 'canceled':
-        case 'requires_capture': // Si vous avez un flux de capture séparé
-          status = PaymentStatus.FAILED; // Ou un autre statut approprié
-          clientSecret = paymentIntent.client_secret;
-          break;
-        default:
-          status = PaymentStatus.PENDING;
-          clientSecret = paymentIntent.client_secret;
-          break;
-      }
-
-      return {
-        clientSecret: clientSecret,
-        transactionId: paymentIntent.id,
-        status: status,
-      };
-    } catch (error) {
-      console.error(
-        'Erreur lors de la création/confirmation du PaymentIntent Stripe:',
-        error,
-      );
-      throw new InternalServerErrorException(
-        `Impossible de créer/confirmer l'intention de paiement via Stripe.`,
-      );
-    }
-  }
-
   async handleWebhook(
     rawPayload: any,
     headers: Record<string, string>,
@@ -254,5 +177,96 @@ export class StripeProvider implements PaymentProvider {
     throw new BadRequestException(
       "Le paiement manuel n'est pas supporté par le fournisseur Stripe.",
     );
+  }
+
+  // --- MÉTHODE createPaymentIntent REFACTORISÉE ---
+  async createPaymentIntent(
+    // On reçoit un objet simplifié au lieu d'une Order complète
+    paymentData: {
+      totalAmount: Prisma.Decimal;
+      business: { currency: { code: string } };
+    },
+    user: User,
+    tx: PrismaClient,
+    metadata: { paymentMethodId?: string; [key: string]: any },
+  ): Promise<PaymentIntentResult> {
+    const { totalAmount, business } = paymentData;
+    const { paymentMethodId, ...restMetadata } = metadata;
+
+    try {
+      const intentParams: Stripe.PaymentIntentCreateParams = {
+        amount: totalAmount.mul(100).toNumber(), // Montant en centimes
+        currency: business.currency.code.toLowerCase(),
+        metadata: {
+          userId: user.id,
+          ...restMetadata,
+        },
+        description: `Paiement sur FortiBone`,
+      };
+
+      // Si un paymentMethodId est fourni, tenter la confirmation automatique
+      if (paymentMethodId) {
+        intentParams.payment_method = paymentMethodId;
+        intentParams.customer = await this.findOrCreateStripeCustomer(
+          user.email,
+        );
+        intentParams.confirm = true;
+        intentParams.off_session = true; // Pour les paiements initiés par le serveur
+      }
+
+      const paymentIntent =
+        await this.stripe.paymentIntents.create(intentParams);
+
+      let status: PaymentStatus;
+      let clientSecret: string | null;
+      switch (paymentIntent.status) {
+        case 'requires_action': // Ex: 3D Secure, redirection nécessaire
+        case 'requires_confirmation':
+        case 'requires_payment_method':
+          status = PaymentStatus.PENDING;
+          clientSecret = paymentIntent.client_secret; // Le frontend utilisera ce secret pour gérer l'action
+          break;
+        case 'succeeded':
+          status = PaymentStatus.SUCCESS;
+          clientSecret = paymentIntent.client_secret;
+          break;
+        case 'canceled':
+        case 'requires_capture': // Si vous avez un flux de capture séparé
+          status = PaymentStatus.FAILED; // Ou un autre statut approprié
+          clientSecret = paymentIntent.client_secret;
+          break;
+        default:
+          status = PaymentStatus.PENDING;
+          clientSecret = paymentIntent.client_secret;
+          break;
+      }
+
+      return {
+        clientSecret, // Toujours retourné, au cas où une authentification 3D Secure est requise
+        transactionId: paymentIntent.id,
+        status,
+      };
+    } catch (error) {
+      console.error(
+        'Erreur lors de la création/confirmation du PaymentIntent Stripe:',
+        error,
+      );
+      throw new InternalServerErrorException(
+        `Impossible de créer/confirmer l'intention de paiement via Stripe.`,
+      );
+    }
+  }
+
+  // Helper pour trouver ou créer un client Stripe (bonne pratique pour sauvegarder les cartes)
+  private async findOrCreateStripeCustomer(email: string): Promise<string> {
+    const customers = await this.stripe.customers.list({
+      email: email,
+      limit: 1,
+    });
+    if (customers.data.length > 0) {
+      return customers.data[0].id;
+    }
+    const newCustomer = await this.stripe.customers.create({ email });
+    return newCustomer.id;
   }
 }

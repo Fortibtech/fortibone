@@ -18,7 +18,11 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { WalletResponseDto } from './dto/wallet-responses.dto';
-import { User, WalletTransactionStatus, WalletTransactionType } from '@prisma/client';
+import {
+  User,
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from '@prisma/client';
 import {
   PaginatedTransactionsResponseDto,
   PaymentIntentResponseDto,
@@ -65,7 +69,10 @@ export class WalletController {
     @Request() req: { user: User },
     @Body() dto: DepositDto,
   ) {
-    return this.walletService.initiateDeposit(req.user.id, dto);
+    const metadata = {
+      paymentMethodId: dto.paymentMethodId,
+    };
+    return this.walletService.initiateDeposit(req.user.id, dto, metadata);
   }
 
   @Get('transactions')

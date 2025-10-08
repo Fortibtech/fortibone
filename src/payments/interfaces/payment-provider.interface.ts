@@ -38,9 +38,10 @@ export abstract class PaymentProvider {
   abstract readonly method: PaymentMethodEnum; // La méthode que ce provider gère (STRIPE, MVOLA, MANUAL)
 
   abstract createPaymentIntent(
-    order: Order,
+    paymentData: any,
     user: User, // L'utilisateur qui initie le paiement
     prisma: PrismaClient, // Pour les interactions BDD dans la transaction
+
     metadata?: any,
   ): Promise<PaymentIntentResult>;
 

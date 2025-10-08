@@ -117,6 +117,51 @@ export class PaymentsService {
     );
   }
 
+  // --- NOUVELLE MÉTHODE GÉNÉRIQUE ---
+  async createPaymentIntent(
+    amount: number,
+    currencyCode: string,
+    user: User,
+    method: PaymentMethodEnum,
+    metadata: Record<string, any>, // Les métadonnées sont maintenant obligatoires pour le contexte
+  ) {
+    if (!metadata || !metadata.context) {
+      throw new BadRequestException(
+        "Le contexte de paiement (ex: 'WALLET_DEPOSIT', 'ORDER_PAYMENT') est requis dans les métadonnées.",
+      );
+    }
+
+    // Convertir le montant en décimal pour la précision
+    const decimalAmount = new Prisma.Decimal(amount);
+
+    // Déleguer à l'implémentation spécifique du fournisseur
+    const provider = this.getProvider(method);
+    const result = await provider.createPaymentIntent(
+      {
+        totalAmount: decimalAmount,
+        business: { currency: { code: currencyCode } },
+      } as any,
+      user,
+      this.prisma,
+      metadata,
+    );
+
+    // Créer l'entrée de transaction de paiement
+    await this.prisma.paymentTransaction.create({
+      data: {
+        amount: decimalAmount,
+        currencyCode: currencyCode,
+        provider: method,
+        providerTransactionId: result.transactionId,
+        status: result.status,
+        metadata,
+        // orderId peut être ajouté plus tard par le webhook si le contexte est ORDER_PAYMENT
+      },
+    });
+
+    return result;
+  }
+
   async confirmManualPayment(
     orderId: string,
     adminUser: User, // Un utilisateur admin ou propriétaire

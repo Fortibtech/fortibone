@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  PaymentStatus,
   Prisma,
   PrismaClient,
   WalletTransactionStatus,
@@ -47,6 +48,7 @@ export class WalletService {
   async findOrCreateUserWallet(userId: string) {
     let wallet = await this.prisma.wallet.findUnique({
       where: { userId },
+      include: { currency: true },
     });
 
     if (!wallet) {
@@ -62,6 +64,7 @@ export class WalletService {
           userId,
           currencyId: defaultCurrency.id,
         },
+        include: { currency: true },
       });
     }
 
@@ -142,7 +145,7 @@ export class WalletService {
     }
 
     // 2. Créer la transaction de portefeuille
-   const transaction = await tx.walletTransaction.create({
+    const transaction = await tx.walletTransaction.create({
       data: {
         walletId,
         type: WalletTransactionType.PAYMENT, // Ou WITHDRAWAL, à adapter
@@ -163,82 +166,49 @@ export class WalletService {
         },
       },
     });
-    return {wallet: finalWallet, transaction };
+    return { wallet: finalWallet, transaction };
   }
 
-  // --- NOUVELLE MÉTHODE POUR INITIER UN DÉPÔT ---
-  async initiateDeposit(userId: string, dto: DepositDto) {
+  // --- NOUVELLE VERSION de initiateDeposit ---
+  async initiateDeposit(userId: string, dto: DepositDto, metadata?: any) {
     const { amount, method } = dto;
     const wallet = await this.findOrCreateUserWallet(userId);
 
-    // 1. Démarrer une transaction Prisma pour créer la transaction de portefeuille en attente
-    const walletTransaction = await this.prisma.walletTransaction.create({
-      data: {
-        walletId: wallet.id,
-        type: WalletTransactionType.DEPOSIT,
-        amount: new Prisma.Decimal(amount),
-        status: WalletTransactionStatus.PENDING,
-        description: `Dépôt en attente via ${method}`,
-      },
-    });
+    // Les métadonnées pour le contexte du paiement sont essentielles
+    const paymentMetadata = {
+      ...metadata,
+      context: 'WALLET_DEPOSIT',
+      walletId: wallet.id,
+      userId: userId,
+    };
 
-    // 2. Créer une commande "fictive" pour le paiement, car notre PaymentsModule est basé sur les commandes
-    // C'est une approche robuste pour réutiliser la logique de paiement existante.
-    // On lie le paiement à l'entreprise FortiBone elle-même (à créer dans le seed si besoin).
-    const fortiboneBusiness = await this.prisma.business.findFirst({
-      // Trouver une entreprise "interne" qui représente la plateforme
-      where: { name: 'FortiBone Platform' }, // Assurez-vous que cette entreprise existe
-    });
-    if (!fortiboneBusiness) {
-      throw new InternalServerErrorException(
-        'Entreprise de la plateforme non configurée pour les dépôts.',
-      );
+    // Appeler le PaymentsService générique
+    const paymentResult = await this.paymentsService.createPaymentIntent(
+      amount,
+      wallet.currency.code, // Utiliser la devise du portefeuille
+      { id: userId } as any, // User simplifié
+      method,
+      paymentMetadata,
+    );
+
+    // Si le paiement a réussi immédiatement (cas Stripe avec confirmation auto)
+    if (paymentResult.status === PaymentStatus.SUCCESS) {
+      await this.prisma.$transaction(async (tx) => {
+        await this.credit({
+          walletId: wallet.id,
+          amount: amount,
+          description: `Dépôt réussi via ${method}`,
+          relatedPaymentTransactionId: paymentResult.transactionId,
+          tx,
+        });
+      });
     }
 
-    const depositOrder = await this.prisma.order.create({
-      data: {
-        orderNumber: `DEPOSIT-${walletTransaction.id}`,
-        type: 'SALE', // Un dépôt est une "vente" de crédit de portefeuille
-        status: 'PENDING_PAYMENT',
-        totalAmount: new Prisma.Decimal(amount),
-        businessId: fortiboneBusiness.id,
-        customerId: userId,
-      },
-    });
-
-    // 3. Appeler le PaymentsService pour créer l'intention de paiement externe
-    try {
-      const paymentIntentResult = await this.paymentsService.createPayment(
-        depositOrder.id,
-        { id: userId } as any, // Passer l'objet User simplifié
-        method,
-        {
-          context: 'WALLET_DEPOSIT', // Le contexte CRUCIAL pour le webhook
-          walletTransactionId: walletTransaction.id,
-        },
-      );
-
-      // Lier la transaction de paiement externe à notre transaction de portefeuille
-      await this.prisma.walletTransaction.update({
-        where: { id: walletTransaction.id },
-        data: {
-          relatedPaymentTransactionId: paymentIntentResult.transactionId,
-        },
-      });
-
-      return paymentIntentResult;
-    } catch (error) {
-      // Si l'initiation du paiement externe échoue, annuler la transaction de portefeuille
-      await this.prisma.walletTransaction.update({
-        where: { id: walletTransaction.id },
-        data: { status: WalletTransactionStatus.FAILED },
-      });
-      throw error; // Propager l'erreur
-    }
+    // Le frontend reçoit toujours la réponse pour gérer les cas de 3D Secure, etc.
+    return paymentResult;
   }
 
-
-   /**
+  /**
    * Récupère l'historique des transactions du portefeuille d'un utilisateur,
    * avec des options de filtrage et de pagination.
    * @param userId - L'ID de l'utilisateur.
@@ -246,7 +216,15 @@ export class WalletService {
    * @returns Une liste paginée de transactions de portefeuille.
    */
   async findUserTransactions(userId: string, dto: QueryWalletTransactionsDto) {
-    const { page = 1, limit = 10, search, type, status, startDate, endDate } = dto;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = dto;
     const skip = (page - 1) * limit;
 
     // S'assurer que le portefeuille de l'utilisateur existe
