@@ -1,7 +1,13 @@
 // src/wallet/dto/deposit.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethodEnum } from '@prisma/client';
-import { IsEnum, IsNumber, IsPositive } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 
 export class DepositDto {
   @ApiProperty({ description: 'Le montant à déposer dans le portefeuille' })
@@ -15,4 +21,12 @@ export class DepositDto {
   })
   @IsEnum(PaymentMethodEnum)
   method: PaymentMethodEnum;
+
+  @ApiPropertyOptional({
+    description:
+      "ID de la méthode de paiement créée par le frontend (ex: Stripe's pm_xxx). Requis pour la confirmation automatique.",
+  })
+  @IsOptional()
+  @IsString()
+  paymentMethodId?: string;
 }
