@@ -127,11 +127,13 @@ export class MvolaProvider implements PaymentProvider {
     metadata?: any,
   ): Promise<PaymentIntentResult> {
     // Mvola a besoin du numéro de téléphone du client (MSISDN)
-    if (!user.phoneNumber) {
+    if (!user.phoneNumber && !metadata.phoneNumber) {
       throw new BadRequestException(
         "Le numéro de téléphone de l'utilisateur est requis pour les paiements Mvola.",
       );
     }
+
+    const phoneNumber: string = metadata.phoneNumber || user.phoneNumber;
 
     try {
       const accessToken = await this.getAccessToken();
@@ -151,7 +153,7 @@ export class MvolaProvider implements PaymentProvider {
             requestingOrganisationTransactionReference: order.id, // Notre ID de commande pour référence
             requestDate: requestDate,
             originalTransactionReference: '', // Non applicable pour une nouvelle transaction
-            debitParty: [{ key: 'msisdn', value: user.phoneNumber }], // Le client qui paie
+            debitParty: [{ key: 'msisdn', value: phoneNumber }], // Le client qui paie
             creditParty: [{ key: 'msisdn', value: this.merchantMsisdn }], // Le marchand qui reçoit
             metadata: [
               { key: 'orderId', value: order.id },
