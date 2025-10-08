@@ -69,10 +69,7 @@ export class WalletController {
     @Request() req: { user: User },
     @Body() dto: DepositDto,
   ) {
-    const metadata = {
-      paymentMethodId: dto.paymentMethodId,
-    };
-    return this.walletService.initiateDeposit(req.user.id, dto, metadata);
+    return this.walletService.initiateDeposit(req.user.id, dto, dto.metadata);
   }
 
   @Get('transactions')

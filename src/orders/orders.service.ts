@@ -89,13 +89,13 @@ export class OrdersService {
         }
 
         // Débiter le portefeuille
-        const {transaction} = await this.walletService.debit({
+        const { transaction } = await this.walletService.debit({
           walletId: wallet.id,
           amount: totalAmount,
           description: `Paiement pour la commande #${`ORD-${Date.now()}`}`, // Utiliser un placeholder
           tx,
         });
-        paymentTransaction = transaction
+        paymentTransaction = transaction;
 
         orderStatus = OrderStatus.PAID; // La commande est payée immédiatement
         paymentMethod = PaymentMethodEnum.WALLET; // Le moyen de paiement est le portefeuille
