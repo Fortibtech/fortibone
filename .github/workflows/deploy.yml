@@ -14,8 +14,8 @@ jobs:
       - name: Copy files via SSH
         uses: appleboy/scp-action@v1
         with:
-          host: 212.132.99.71
-          username: root
+          host: 51.91.79.101
+          username: ubuntu
           password: fortibtech
           source: "*"
           target: /var/www/fortibone-backend/
@@ -24,13 +24,13 @@ jobs:
 
       - name: Deploy FortibOne to VPS
         env:
-          VPS_HOST: 212.132.99.71
-          VPS_USER: root
+          VPS_HOST: 51.91.79.101
+          VPS_USER: ubuntu
           WORK_DIR: /var/www/fortibone-backend/
         run: |
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..." 
 
-          sshpass -p "fortibtech" ssh -o StrictHostKeyChecking=no root@212.132.99.71 << 'EOF'
+          sshpass -p "fortibtech" ssh -o StrictHostKeyChecking=no ubuntu@51.91.79.101 << 'EOF'
             echo "Connected to VPS. Current directory: $(pwd)"
             
             cd /var/www/fortibone-backend/
