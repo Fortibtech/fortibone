@@ -7,50 +7,68 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest # L'environnement où l'action s'exécute (pas votre VPS)
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-      - name: Copy files via SSH
+
+      # Étape 1 : Copier d'abord dans un dossier temporaire (non protégé)
+      - name: Copy files to VPS temp folder
         uses: appleboy/scp-action@v1
         with:
           host: 51.91.79.101
-          username: root
+          username: ubuntu
           password: fortibtech
           source: "*"
-          target: /var/www/fortibone-backend/
+          target: /tmp/fortibone-backend/
+
+      # Étape 2 : Installer sshpass pour commandes SSH
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Deploy FortibOne to VPS
+      # Étape 3 : Déploiement avec élévation de privilèges
+      - name: Deploy FortibOne with sudo
         env:
           VPS_HOST: 51.91.79.101
-          VPS_USER: root
-          WORK_DIR: /var/www/fortibone-backend/
+          VPS_USER: ubuntu
+          VPS_PASSWORD: fortibtech
+          WORK_DIR: /var/www/fortibone-backend
         run: |
-          echo "Connecting to ${VPS_USER}@${VPS_HOST}..." 
+          echo "Connecting to ${VPS_USER}@${VPS_HOST}..."
+          sshpass -p "${VPS_PASSWORD}" ssh -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_HOST} << 'EOF'
+            set -e
 
-          sshpass -p "fortibtech" ssh -o StrictHostKeyChecking=no root@51.91.79.101 << 'EOF'
-            echo "Connected to VPS. Current directory: $(pwd)"
-            
-            cd /var/www/fortibone-backend/
-            echo "Changed to directory: $(pwd)"
+            echo "Connected to VPS. Running with sudo privileges..."
+
+            # Créer le répertoire si inexistant
+            sudo mkdir -p /var/www/fortibone-backend
+            sudo chown -R $USER:$USER /tmp/fortibone-backend
+
+            echo "Copying files to final directory..."
+            sudo rm -rf /var/www/fortibone-backend/*
+            sudo cp -r /tmp/fortibone-backend/* /var/www/fortibone-backend/
+            sudo chown -R root:root /var/www/fortibone-backend
+
+            cd /var/www/fortibone-backend
 
             echo "Stopping existing containers..."
-            docker compose down
+            sudo docker compose down || true
 
             echo "Building and starting new containers..."
-            docker compose build
-            docker compose up -d
+            sudo docker compose build
+            sudo docker compose up -d
 
             echo "Waiting for database to be healthy..."
             sleep 10
 
             echo "Applying database migrations..."
-            docker compose exec api npx prisma migrate deploy
+            sudo docker compose exec api npx prisma migrate deploy
 
             echo "Seeding database..."
-            docker compose exec api npm run seed
+            sudo docker compose exec api npm run seed
 
-            echo "Deployment finished!"
+            echo "Cleaning temp files..."
+            sudo rm -rf /tmp/fortibone-backend
+
+            echo "✅ Deployment finished successfully!"
           EOF
