@@ -539,7 +539,8 @@ enum OrderStatus {
 // Nouvelle Enum pour les méthodes de paiement
 enum PaymentMethodEnum {
   STRIPE
-  MVOLA // Exemple pour le paiement local Comorien
+  KARTAPAY 
+  MVOLA 
   WALLET
   MANUAL
 }

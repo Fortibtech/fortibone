@@ -13,9 +13,11 @@ import { PaymentMethodEnum } from '@prisma/client';
 import { OrdersService } from 'src/orders/orders.service';
 import { ManualPaymentProvider } from './providers/manual.provider';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { KartaPayProvider } from './providers/kartapay.provider';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
+  KartaPayProvider, // REMPLACER MVOLA
   MvolaProvider,
   ManualPaymentProvider,
 ];
