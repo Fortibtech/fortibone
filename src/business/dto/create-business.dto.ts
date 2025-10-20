@@ -1,6 +1,6 @@
 // src/business/dto/create-business.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessType } from '@prisma/client';
+import { BusinessType, CommerceType } from '@prisma/client';
 import {
   IsEnum,
   IsNotEmpty,
@@ -99,4 +99,39 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString() // On pourrait créer un custom validator pour vérifier que l'ID existe
   currencyId?: string;
+
+  @ApiPropertyOptional({
+    example: '12345678901234',
+    description: "Numéro SIRET ou identifiant fiscal de l'entreprise",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  siret?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://maboutique.com',
+    description: "URL du site web de l'entreprise",
+  })
+  @IsOptional()
+  @IsUrl()
+  websiteUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'Vente au détail de vêtements',
+    description: "Secteur d'activité de l'entreprise",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  activitySector?: string;
+
+  @ApiPropertyOptional({
+    enum: CommerceType,
+    example: CommerceType.PHYSICAL,
+    description: 'Type de commerce (Physique, Digital, ou Hybride)',
+  })
+  @IsOptional()
+  @IsEnum(CommerceType)
+  commerceType?: CommerceType;
 }

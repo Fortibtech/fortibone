@@ -88,15 +88,19 @@ model Business {
   createdAt     DateTime                              @default(now()) @map("created_at")
   updatedAt     DateTime                              @updatedAt @map("updated_at")
 
-  // --- CHAMP AJOUTÉ POUR LA DEVISE ---
+  // --- NOUVEAUX CHAMPS AJOUTÉS ---
+  siret         String?   @unique // Numéro SIRET (ou équivalent local), doit être unique
+  websiteUrl    String?   @map("website_url")
+  activitySector String?  @map("activity_sector") // Secteur d'activité (ex: "Mode", "Alimentation", "Tech")
+  commerceType  CommerceType @default(PHYSICAL) @map("commerce_type") // Type de commerce
+  // -----------------------------
+
   currency   Currency? @relation(fields: [currencyId], references: [id])
   currencyId String?   @map("currency_id")
 
-  // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
   averageRating Float @default(0) @map("average_rating")
   reviewCount   Int   @default(0) @map("review_count")
 
-  // --- RELATIONS AJOUTÉES ---
   openingHours OpeningHour[]
   reviews      BusinessReview[]
   invitations  Invitation[]
@@ -598,4 +602,11 @@ enum WalletTransactionStatus {
   COMPLETED  // La transaction a réussi, les fonds sont déplacés
   FAILED     // La transaction a échoué
   CANCELLED  // La transaction a été annulée
+}
+
+// --- NOUVELLE ENUM POUR LE TYPE DE COMMERCE ---
+enum CommerceType {
+  PHYSICAL    // Commerce physique
+  DIGITAL     // Commerce en ligne / E-commerce
+  HYBRID      // Les deux
 }

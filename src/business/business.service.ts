@@ -27,7 +27,7 @@ export class BusinessService {
   ) {}
 
   async create(createBusinessDto: CreateBusinessDto, ownerId: string) {
-    const { currencyId, latitude, longitude, ...rest } = createBusinessDto;
+    const { currencyId, latitude, longitude, siret, ...rest } = createBusinessDto;
 
     let finalCurrencyId = currencyId;
 
@@ -50,6 +50,18 @@ export class BusinessService {
       throw new BadRequestException(
         `La devise spécifiée (${finalCurrencyId}) n'existe pas.`,
       );
+    }
+
+    // --- VÉRIFICATION D'UNICITÉ DU SIRET ---
+    if (siret) {
+      const existingBusiness = await this.prisma.business.findUnique({
+        where: { siret },
+      });
+      if (existingBusiness) {
+        throw new ConflictException(
+          `Une entreprise avec le numéro SIRET ${siret} existe déjà.`,
+        );
+      }
     }
 
     const businessData = {

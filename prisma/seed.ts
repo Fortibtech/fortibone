@@ -9,6 +9,7 @@ import {
   OrderStatus,
   SalesUnit,
   MovementType,
+  CommerceType,
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import {
@@ -207,6 +208,12 @@ async function main() {
       phoneNumber: generateRandomPhoneNumber(),
       logoUrl: 'https://via.placeholder.com/150/0000FF/FFFFFF?text=BobShop', // Placeholder bleu
       coverImageUrl: 'https://picsum.photos/seed/shop1/1080/400', // Image de couverture aléatoire mais stable
+        // --- AJOUTS ---
+      siret: '12345678901234',
+      websiteUrl: 'https://bobs-boutique.com',
+      activitySector: 'Mode et Habillement',
+      commerceType: CommerceType.HYBRID,
+      // --------------
       isVerified: true,
     },
   });
@@ -228,6 +235,11 @@ async function main() {
       logoUrl: 'https://via.placeholder.com/150/FF0000/FFFFFF?text=LeGout', // Placeholder rouge
       coverImageUrl: 'https://picsum.photos/seed/restaurant1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
+      // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      siret: '987654321',
+      websiteUrl: 'https://legoutdumonde.com',
+      activitySector: 'Restauration traditionnelle',
+      commerceType: CommerceType.PHYSICAL,
     },
   });
   await prisma.$executeRaw`
@@ -248,6 +260,11 @@ async function main() {
       logoUrl: 'https://via.placeholder.com/150/00FF00/000000?text=SupplierX', // Placeholder vert
       coverImageUrl: 'https://picsum.photos/seed/supplier1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
+        // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      siret: '555444333',
+      websiteUrl: 'https://supplierexpress-b2b.com',
+      activitySector: 'Commerce de gros',
+      commerceType: CommerceType.DIGITAL,
     },
   });
   console.log('Businesses seeded.');
