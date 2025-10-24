@@ -36,42 +36,39 @@ jobs:
         run: |
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..."
           sshpass -p "${VPS_PASSWORD}" ssh -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_HOST} << 'EOF'
-            echo '$VPS_PASS' | sudo -S bash -c '
-              set -e
+            set -e
 
-              echo "Connected to VPS. Running with sudo privileges..."
+            echo "Connected to VPS. Running with sudo privileges..."
 
-              # Créer le répertoire si inexistant
-             sudo mkdir -p /var/www/fortibone-backend
-             sudo chown -R $USER:$USER /tmp/fortibone-backend
+            # Créer le répertoire si inexistant
+            sudo mkdir -p /var/www/fortibone-backend
+            sudo chown -R $USER:$USER /tmp/fortibone-backend
 
-              echo "Copying files to final directory..."
-             sudo rm -rf /var/www/fortibone-backend/*
-             sudo cp -r /tmp/fortibone-backend/* /var/www/fortibone-backend/
-             sudo chown -R root:root /var/www/fortibone-backend
+            echo "Copying files to final directory..."
+            sudo rm -rf /var/www/fortibone-backend/*
+            sudo cp -r /tmp/fortibone-backend/* /var/www/fortibone-backend/
+            sudo chown -R root:root /var/www/fortibone-backend
 
-              cd /var/www/fortibone-backend
+            cd /var/www/fortibone-backend
 
-              echo "Stopping existing containers..."
-             sudo docker compose down || true
+            echo "Stopping existing containers..."
+            sudo docker compose down || true
 
-              echo "Building and starting new containers..."
-             sudo docker compose build
-             sudo docker compose up -d
+            echo "Building and starting new containers..."
+            sudo docker compose build
+            sudo docker compose up -d
 
-              echo "Waiting for database to be healthy..."
-              sleep 10
+            echo "Waiting for database to be healthy..."
+            sleep 10
 
-              echo "Applying database migrations..."
-             sudo docker compose exec api npx prisma migrate deploy
+            echo "Applying database migrations..."
+            sudo docker compose exec api npx prisma migrate deploy
 
-              echo "Seeding database..."
-             sudo docker compose exec api npm run seed
+            echo "Seeding database..."
+            sudo docker compose exec api npm run seed
 
-              echo "Cleaning temp files..."
-             sudo rm -rf /tmp/fortibone-backend
+            echo "Cleaning temp files..."
+            sudo rm -rf /tmp/fortibone-backend
 
-              echo "✅ Deployment finished successfully!"
-            '
+            echo "✅ Deployment finished successfully!"
           EOF
-
