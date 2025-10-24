@@ -41,8 +41,8 @@ jobs:
             echo "Connected to VPS. Running with sudo privileges..."
 
             # Créer le répertoire si inexistant
-            echo "$VPS_PASS" | sudo -S mkdir -p /var/www/fortibone-backend
-            echo "$VPS_PASS" | sudo -S chown -R $USER:$USER /tmp/fortibone-backend
+            echo "$VPS_PASSWORD" | sudo -S mkdir -p /var/www/fortibone-backend
+            echo "$VPS_PASSWORD" | sudo -S chown -R $USER:$USER /tmp/fortibone-backend
 
             echo "Copying files to final directory..."
             echo "$VPS_PASSWORD" | sudo -S rm -rf /var/www/fortibone-backend/*
