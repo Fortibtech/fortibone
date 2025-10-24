@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: fortibtech-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -16,9 +16,9 @@ jobs:
       - name: Copy files to VPS temp folder
         uses: appleboy/scp-action@v1
         with:
-          host: 51.91.79.101
-          username: ubuntu
-          password: fortibtech
+          host: 212.132.99.71
+          username: fortibtech
+          password: 26baraka
           source: "*"
           target: /tmp/fortibone-backend/
 
@@ -29,9 +29,9 @@ jobs:
       # Étape 3 : Déploiement avec élévation de privilèges
       - name: Deploy FortibOne with sudo
         env:
-          VPS_HOST: 51.91.79.101
-          VPS_USER: ubuntu
-          VPS_PASSWORD: fortibtech
+          VPS_HOST: 212.132.99.71
+          VPS_USER: fortibtech
+          VPS_PASSWORD: 26baraka
           WORK_DIR: /var/www/fortibone-backend
         run: |
           echo "Connecting to ${VPS_USER}@${VPS_HOST}..."
