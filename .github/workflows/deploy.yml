@@ -41,34 +41,34 @@ jobs:
             echo "Connected to VPS. Running with sudo privileges..."
 
             # Créer le répertoire si inexistant
-            echo "$VPS_PASSWORD" | sudo -S mkdir -p /var/www/fortibone-backend
-            echo "$VPS_PASSWORD" | sudo -S chown -R $USER:$USER /tmp/fortibone-backend
+            echo "${VPS_PASSWORD}" | sudo -S mkdir -p /var/www/fortibone-backend
+            echo "${VPS_PASSWORD}" | sudo -S chown -R $USER:$USER /tmp/fortibone-backend
 
             echo "Copying files to final directory..."
-            echo "$VPS_PASSWORD" | sudo -S rm -rf /var/www/fortibone-backend/*
-            echo "$VPS_PASSWORD" | sudo -S cp -r /tmp/fortibone-backend/* /var/www/fortibone-backend/
-            echo "$VPS_PASSWORD" | sudo -S chown -R root:root /var/www/fortibone-backend
+            echo "${VPS_PASSWORD}" | sudo -S rm -rf /var/www/fortibone-backend/*
+            echo "${VPS_PASSWORD}" | sudo -S cp -r /tmp/fortibone-backend/* /var/www/fortibone-backend/
+            echo "${VPS_PASSWORD}" | sudo -S chown -R root:root /var/www/fortibone-backend
 
             cd /var/www/fortibone-backend
 
             echo "Stopping existing containers..."
-            echo "$VPS_PASSWORD" | sudo -S docker compose down || true
+            echo "${VPS_PASSWORD}" | sudo -S docker compose down || true
 
             echo "Building and starting new containers..."
-            echo "$VPS_PASSWORD" | sudo -S docker compose build
-            echo "$VPS_PASSWORD" | sudo -S docker compose up -d
+            echo "${VPS_PASSWORD}" | sudo -S docker compose build
+            echo "${VPS_PASSWORD}" | sudo -S docker compose up -d
 
             echo "Waiting for database to be healthy..."
             sleep 10
 
             echo "Applying database migrations..."
-            echo "$VPS_PASSWORD" | sudo -S docker compose exec api npx prisma migrate deploy
+            echo "${VPS_PASSWORD}" | sudo -S docker compose exec api npx prisma migrate deploy
 
             echo "Seeding database..."
-            echo "$VPS_PASSWORD" | sudo -S docker compose exec api npm run seed
+            echo "${VPS_PASSWORD}" | sudo -S docker compose exec api npm run seed
 
             echo "Cleaning temp files..."
-            echo "$VPS_PASSWORD" | sudo -S rm -rf /tmp/fortibone-backend
+            echo "${VPS_PASSWORD}" | sudo -S rm -rf /tmp/fortibone-backend
 
             echo "✅ Deployment finished successfully!"
           EOF
