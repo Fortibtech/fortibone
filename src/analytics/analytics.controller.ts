@@ -33,6 +33,7 @@ import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
 import { RestaurantDetailsDto } from './dto/restaurant-details.dto';
 import { OrderStatus, OrderType } from '@prisma/client';
 import { QueryOrdersDto } from 'src/orders/dto/query-orders.dto';
+import { CustomerProfileDto } from './dto/customer-profile.dto';
 
 // Pour les réponses paginées des listes (exemple pour les commandes du membre)
 // Vous pourriez créer un DTO générique pour les réponses paginées si vous voulez uniformiser.
@@ -247,6 +248,33 @@ export class AnalyticsController {
       businessId,
       req.user.id,
       queryDto,
+    );
+  }
+
+  // --- NOUVEL ENDPOINT POUR LA FICHE CLIENT DÉTAILLÉE ---
+  @Get('customers/:customerId')
+  @ApiOperation({
+    summary:
+      "Obtenir la fiche détaillée d'un client spécifique pour cette entreprise",
+    description:
+      "Nécessite des privilèges de propriétaire ou d'administrateur de l'entreprise.",
+  })
+  @ApiResponse({
+    status: 200,
+    type: CustomerProfileDto,
+    description: 'Fiche détaillée du client.',
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit.' })
+  @ApiResponse({ status: 404, description: 'Entreprise ou client non trouvé.' })
+  getCustomerProfile(
+    @Param('businessId') businessId: string,
+    @Param('customerId') customerId: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.analyticsService.getCustomerProfile(
+      businessId,
+      customerId,
+      req.user.id,
     );
   }
 
