@@ -27,7 +27,8 @@ export class BusinessService {
   ) {}
 
   async create(createBusinessDto: CreateBusinessDto, ownerId: string) {
-    const { currencyId, latitude, longitude, siret, ...rest } = createBusinessDto;
+    const { currencyId, latitude, longitude, siret, ...rest } =
+      createBusinessDto;
 
     let finalCurrencyId = currencyId;
 

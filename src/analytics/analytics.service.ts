@@ -36,6 +36,11 @@ import {
 import { QueryMemberOverviewDto } from './dto/query-member-overview.dto';
 import { MemberOverviewDto } from './dto/member-overview.dto';
 import { QueryOrdersDto } from 'src/orders/dto/query-orders.dto';
+import {
+  CustomerProfileDto,
+  CustomerStatsDto,
+  RecentOrderItemDto,
+} from './dto/customer-profile.dto';
 
 @Injectable()
 export class AnalyticsService {
@@ -1237,5 +1242,111 @@ export class AnalyticsService {
         "Vous n'êtes pas autorisé à consulter les statistiques de ce membre.",
       );
     }
+  }
+
+  // --- NOUVELLE MÉTHODE POUR LA FICHE CLIENT ---
+  async getCustomerProfile(
+    businessId: string,
+    customerId: string,
+    requestingUserId: string,
+  ): Promise<CustomerProfileDto> {
+    await this.verifyBusinessOwnership(businessId, requestingUserId);
+
+    const [customerInfo, customerStats, recentOrdersRaw] =
+      await this.prisma.$transaction([
+        // 1. Informations de base du client
+        this.prisma.user.findUnique({
+          where: { id: customerId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+            profileImageUrl: true, // Pour l'avatar
+            createdAt: true, // Pour "Client depuis" (approximatif, voir ci-dessous)
+          },
+        }),
+
+        // 2. Statistiques agrégées pour ce client et cette entreprise
+        this.prisma.order.aggregate({
+          where: {
+            businessId,
+            customerId,
+            type: OrderType.SALE,
+            status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] },
+          },
+          _sum: { totalAmount: true },
+          _count: { id: true },
+          _max: { createdAt: true }, // Pour la date de dernière commande
+          _min: { createdAt: true }, // Pour la date "Client depuis"
+        }),
+
+        // 3. Les 5 dernières commandes
+        this.prisma.order.findMany({
+          where: {
+            businessId,
+            customerId,
+            type: OrderType.SALE,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            lines: {
+              include: {
+                variant: {
+                  select: {
+                    product: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ]);
+
+    if (!customerInfo) {
+      throw new NotFoundException('Client non trouvé.');
+    }
+
+    // --- Traitement et formatage des résultats ---
+    const totalSalesAmount = customerStats._sum?.totalAmount?.toNumber() || 0;
+    const totalOrders = customerStats._count?.id || 0;
+    const averageOrderValue =
+      totalOrders > 0
+        ? parseFloat((totalSalesAmount / totalOrders).toFixed(2))
+        : 0;
+    const lastOrderDate = customerStats._max?.createdAt || undefined;
+    const clientSince = customerStats._min?.createdAt || customerInfo.createdAt;
+
+    const stats: CustomerStatsDto = {
+      totalSalesAmount,
+      totalOrders,
+      averageOrderValue,
+      lastOrderDate,
+    };
+
+    const recentOrders: RecentOrderItemDto[] = recentOrdersRaw.map((order) => ({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      orderDate: order.createdAt,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      products: order.lines.map((line) => ({
+        productName: line.variant.product.name,
+        quantity: line.quantity,
+      })),
+    }));
+
+    return {
+      customerInfo: {
+        ...customerInfo,
+        lastName: customerInfo.lastName || '',
+        phoneNumber: customerInfo.phoneNumber || '',
+        clientSince,
+      },
+      stats,
+      recentOrders,
+    };
   }
 }

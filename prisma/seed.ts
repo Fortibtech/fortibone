@@ -208,7 +208,7 @@ async function main() {
       phoneNumber: generateRandomPhoneNumber(),
       logoUrl: 'https://via.placeholder.com/150/0000FF/FFFFFF?text=BobShop', // Placeholder bleu
       coverImageUrl: 'https://picsum.photos/seed/shop1/1080/400', // Image de couverture aléatoire mais stable
-        // --- AJOUTS ---
+      // --- AJOUTS ---
       siret: '12345678901234',
       websiteUrl: 'https://bobs-boutique.com',
       activitySector: 'Mode et Habillement',
@@ -260,7 +260,7 @@ async function main() {
       logoUrl: 'https://via.placeholder.com/150/00FF00/000000?text=SupplierX', // Placeholder vert
       coverImageUrl: 'https://picsum.photos/seed/supplier1/1080/400', // Image de couverture aléatoire mais stable
       isVerified: true,
-        // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      // --- NOUVEAUX CHAMPS AJOUTÉS ---
       siret: '555444333',
       websiteUrl: 'https://supplierexpress-b2b.com',
       activitySector: 'Commerce de gros',
