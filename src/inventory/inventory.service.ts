@@ -42,7 +42,7 @@ export class InventoryService {
       variantId,
       userId,
     );
-    const { quantityChange, type, reason } = dto;
+    const { quantityChange, type, reason, batchId } = dto;
 
     if (quantityChange === 0) {
       throw new BadRequestException(
@@ -52,17 +52,33 @@ export class InventoryService {
 
     return this.prisma.$transaction(async (tx) => {
       if (quantityChange < 0) {
-        // --- LOGIQUE DE DÉCRÉMENTATION (FEFO) ---
-        return this.decrementStockFromBatches(tx, {
-          variantId,
-          businessId,
-          userId,
-          quantityToRemove: Math.abs(quantityChange),
-          movementType: type,
-          reason,
-        });
+        // --- LOGIQUE DE DÉCRÉMENTATION ---
+        const quantityToRemove = Math.abs(quantityChange);
+
+        if (batchId) {
+          // Scénario 1 : Ajustement sur un lot spécifique
+          return this.decrementStockFromSpecificBatch(tx, {
+            variantId,
+            businessId,
+            userId,
+            batchId,
+            quantityToRemove,
+            movementType: type,
+            reason,
+          });
+        } else {
+          // Scénario 2 : Ajustement FEFO (comportement par défaut)
+          return this.decrementStockFromBatches(tx, {
+            variantId,
+            businessId,
+            userId,
+            quantityToRemove,
+            movementType: type,
+            reason,
+          });
+        }
       } else {
-        // --- LOGIQUE D'INCRÉMENTATION (Création d'un nouveau lot) ---
+        // --- LOGIQUE D'INCRÉMENTATION (ne change pas) ---
         return this.incrementStockAsNewBatch(tx, {
           variantId,
           businessId,
@@ -73,6 +89,78 @@ export class InventoryService {
         });
       }
     });
+  }
+
+  // --- NOUVELLE MÉTHODE PRIVÉE POUR AJUSTER UN LOT SPÉCIFIQUE ---
+  private async decrementStockFromSpecificBatch(
+    tx: Prisma.TransactionClient,
+    params: {
+      variantId: string;
+      businessId: string;
+      userId: string;
+      batchId: string;
+      quantityToRemove: number;
+      movementType: MovementType;
+      reason?: string;
+    },
+  ) {
+    const {
+      variantId,
+      businessId,
+      userId,
+      batchId,
+      quantityToRemove,
+      movementType,
+      reason,
+    } = params;
+
+    const batch = await tx.productBatch.findUnique({ where: { id: batchId } });
+
+    // Vérifications de sécurité
+    if (!batch) {
+      throw new NotFoundException(
+        `Le lot avec l'ID ${batchId} n'a pas été trouvé.`,
+      );
+    }
+    if (batch.variantId !== variantId) {
+      throw new BadRequestException(
+        "Le lot spécifié n'appartient pas à la bonne variante de produit.",
+      );
+    }
+    if (batch.quantity < quantityToRemove) {
+      throw new BadRequestException(
+        `Stock insuffisant dans le lot spécifié. Demandé: ${quantityToRemove}, disponible: ${batch.quantity}.`,
+      );
+    }
+
+    // 1. Mettre à jour la quantité du lot spécifique
+    await tx.productBatch.update({
+      where: { id: batchId },
+      data: { quantity: { decrement: quantityToRemove } },
+    });
+
+    // 2. Mettre à jour la quantité totale sur la variante
+    const updatedVariant = await tx.productVariant.update({
+      where: { id: variantId },
+      data: { quantityInStock: { decrement: quantityToRemove } },
+    });
+
+    // 3. Créer le mouvement de stock pour la traçabilité
+    await tx.stockMovement.create({
+      data: {
+        variantId,
+        businessId,
+        performedById: userId,
+        type: movementType,
+        quantityChange: -quantityToRemove,
+        newQuantity: updatedVariant.quantityInStock,
+        reason: reason
+          ? `${reason} (Lot #${batchId.substring(0, 8)})`
+          : `Ajustement (Lot #${batchId.substring(0, 8)})`,
+      },
+    });
+
+    return updatedVariant;
   }
 
   // Méthode privée pour gérer la sortie de stock (FEFO)

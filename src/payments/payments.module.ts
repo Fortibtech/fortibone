@@ -14,12 +14,35 @@ import { OrdersService } from 'src/orders/orders.service';
 import { ManualPaymentProvider } from './providers/manual.provider';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { KartaPayProvider } from './providers/kartapay.provider';
+import { StripePayoutProvider } from './providers/stripe-payout.provider';
+import { StripeConnectProvider } from './providers/stripe-connect.provider';
+import {
+  WithdrawalProvider,
+  WithdrawalMethod,
+} from './interfaces/withdrawal-provider.interface';
+import { KartaPayDepositProvider } from './providers/kartapay-deposit.provider';
+import { StripeDepositProvider } from './providers/stripe-deposit.provider';
+import {
+  DepositProvider,
+  DepositMethod,
+} from './interfaces/deposit-provider.interface';
+import { KartaPayWithdrawalProvider } from './providers/kartapay-withdrawal.provider';
 
 const paymentProviders: Provider[] = [
   StripeProvider,
   KartaPayProvider, // REMPLACER MVOLA
   MvolaProvider,
   ManualPaymentProvider,
+];
+
+const withdrawalProviders: Provider[] = [
+  StripePayoutProvider,
+  KartaPayWithdrawalProvider, // <--- Ici viendra le provider pour KartaPay
+];
+
+const depositProviders: Provider[] = [
+  StripeDepositProvider,
+  KartaPayDepositProvider,
 ];
 
 @Module({
@@ -32,7 +55,13 @@ const paymentProviders: Provider[] = [
   ],
   providers: [
     PaymentsService,
-    ...(paymentProviders as any),
+    StripeConnectProvider, // Le provider de base pour Stripe
+    StripeProvider, // Le provider de base
+    KartaPayProvider, // Le provider de base
+    ...paymentProviders,
+    ...(withdrawalProviders as any),
+    ...depositProviders,
+
     {
       provide: 'PAYMENT_PROVIDERS_MAP',
       useFactory: (
@@ -53,8 +82,35 @@ const paymentProviders: Provider[] = [
       },
       inject: [ConfigService, HttpService, OrdersService, ...paymentProviders],
     },
+
+    // --- NOUVEAU PROVIDER DYNAMIQUE POUR LES RETRAITS ---
+    {
+      provide: 'WITHDRAWAL_PROVIDERS_MAP',
+      useFactory: (...providers: WithdrawalProvider[]) => {
+        const providerMap = new Map<WithdrawalMethod, WithdrawalProvider>();
+        providers.forEach((p) => providerMap.set(p.method, p));
+        return providerMap;
+      },
+      inject: withdrawalProviders,
+    },
+
+    // --- NOUVEAU PROVIDER DYNAMIQUE POUR LES DÉPÔTS ---
+    {
+      provide: 'DEPOSIT_PROVIDERS_MAP',
+      useFactory: (...providers: DepositProvider[]) => {
+        const providerMap = new Map<DepositMethod, DepositProvider>();
+        providers.forEach((p) => providerMap.set(p.method, p));
+        return providerMap;
+      },
+      inject: depositProviders,
+    },
   ],
   controllers: [PaymentsController],
-  exports: [PaymentsService],
+  exports: [
+    PaymentsService,
+    'WITHDRAWAL_PROVIDERS_MAP',
+    'DEPOSIT_PROVIDERS_MAP',
+    StripeConnectProvider,
+  ],
 })
 export class PaymentsModule {}

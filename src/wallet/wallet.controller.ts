@@ -17,7 +17,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { WalletResponseDto } from './dto/wallet-responses.dto';
+import {
+  WalletResponseDto,
+  WalletTransactionResponseDto,
+} from './dto/wallet-responses.dto';
 import {
   User,
   WalletTransactionStatus,
@@ -29,6 +32,7 @@ import {
 } from 'src/payments/dto/payment-responses.dto';
 import { DepositDto } from './dto/deposit.dto';
 import { QueryWalletTransactionsDto } from './dto/query-wallet-transactions.dto';
+import { WithdrawalDto } from './dto/withdrawal.dto';
 
 @ApiTags('Wallet')
 @Controller('wallet')
@@ -69,7 +73,22 @@ export class WalletController {
     @Request() req: { user: User },
     @Body() dto: DepositDto,
   ) {
-    return this.walletService.initiateDeposit(req.user.id, dto, dto.metadata);
+    return this.walletService.initiateDeposit(req.user.id, dto);
+  }
+
+  @Post('withdraw')
+  @ApiOperation({ summary: 'Demander un retrait des fonds du portefeuille' })
+  @ApiResponse({
+    status: 201,
+    type: WalletTransactionResponseDto,
+    description: 'Demande de retrait créée et en attente de validation.',
+  })
+  @ApiResponse({ status: 400, description: 'Solde insuffisant.' })
+  async requestWithdrawal(
+    @Request() req: { user: User },
+    @Body() dto: WithdrawalDto,
+  ) {
+    return this.walletService.requestWithdrawal(req.user.id, dto);
   }
 
   @Get('transactions')

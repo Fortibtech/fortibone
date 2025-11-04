@@ -10,7 +10,6 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// On ne permet que certains types de mouvements manuels
 const allowedManualMovementTypes = [
   MovementType.ADJUSTMENT,
   MovementType.LOSS,
@@ -44,4 +43,13 @@ export class AdjustStockDto {
   @IsString()
   @MaxLength(255)
   reason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "ID du lot spécifique à ajuster. Si non fourni, l'ajustement se fera selon la logique FEFO (First-Expired-First-Out).",
+    example: 'clw9a1b2c0000d4t6efgh1234',
+  })
+  @IsOptional()
+  @IsString()
+  batchId?: string;
 }
