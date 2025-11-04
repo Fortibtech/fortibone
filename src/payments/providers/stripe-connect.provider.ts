@@ -10,7 +10,7 @@ export class StripeConnectProvider {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.getOrThrow<string>('STRIPE_API_KEY');
-    this.stripe = new Stripe(apiKey, { apiVersion: '2025-07-30.basil' });
+    this.stripe = new Stripe(apiKey);
   }
 
   // Crée un compte connecté Stripe pour un utilisateur s'il n'en a pas
