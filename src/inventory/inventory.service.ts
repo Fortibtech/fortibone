@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MovementType, Prisma } from '@prisma/client';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { AddBatchDto } from './dto/add-batch.dto';
+import { QueryBatchesDto } from './dto/query-batches.dto';
+import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @Injectable()
 export class InventoryService {
@@ -492,5 +494,132 @@ export class InventoryService {
         lossesRecorded: totalLoss,
       };
     });
+  }
+
+  // --- NOUVELLES MÉTHODES DE GESTION DES LOTS ---
+
+  async findAllBatchesForVariant(
+    variantId: string,
+    userId: string,
+    queryDto: QueryBatchesDto,
+  ) {
+    await this.verifyOwnership(variantId, userId);
+    const { page = 1, limit = 10 } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const [batches, total] = await this.prisma.$transaction([
+      this.prisma.productBatch.findMany({
+        where: { variantId },
+        skip,
+        take: limit,
+        orderBy: { receivedAt: 'desc' },
+      }),
+      this.prisma.productBatch.count({ where: { variantId } }),
+    ]);
+
+    return {
+      data: batches,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async updateBatch(batchId: string, userId: string, dto: UpdateBatchDto) {
+    const batch = await this.prisma.productBatch.findUnique({
+      where: { id: batchId },
+    });
+    if (!batch) throw new NotFoundException('Lot non trouvé.');
+    await this.verifyOwnership(batch.variantId, userId);
+
+    const { quantity, expirationDate } = dto;
+    const dataToUpdate: Prisma.ProductBatchUpdateInput = {
+      expirationDate: expirationDate ? new Date(expirationDate) : undefined,
+    };
+
+    // Si la quantité change, nous devons créer un mouvement de stock pour la traçabilité
+    if (quantity !== undefined && quantity !== batch.quantity) {
+      const quantityChange = quantity - batch.quantity;
+
+      return this.prisma.$transaction(async (tx) => {
+        // Mettre à jour la quantité du lot
+        const updatedBatch = await tx.productBatch.update({
+          where: { id: batchId },
+          data: { ...dataToUpdate, quantity },
+        });
+
+        // Mettre à jour la quantité totale sur la variante
+        const updatedVariant = await tx.productVariant.update({
+          where: { id: batch.variantId },
+          data: { quantityInStock: { increment: quantityChange } },
+        });
+
+        // Créer un mouvement de stock de type AJUSTEMENT
+        await tx.stockMovement.create({
+          data: {
+            variantId: batch.variantId,
+            businessId: (await this.verifyOwnership(batch.variantId, userId))
+              .businessId,
+            performedById: userId,
+            type: 'ADJUSTMENT',
+            quantityChange,
+            newQuantity: updatedVariant.quantityInStock,
+            reason: `Mise à jour manuelle du lot #${batchId.substring(0, 8)}`,
+          },
+        });
+
+        return updatedBatch;
+      });
+    } else {
+      // Simple mise à jour sans changement de quantité
+      return this.prisma.productBatch.update({
+        where: { id: batchId },
+        data: dataToUpdate,
+      });
+    }
+  }
+
+  async removeBatch(batchId: string, userId: string) {
+    const batch = await this.prisma.productBatch.findUnique({
+      where: { id: batchId },
+    });
+    if (!batch) throw new NotFoundException('Lot non trouvé.');
+    await this.verifyOwnership(batch.variantId, userId);
+
+    // Si le lot contient encore du stock, il faut ajuster la variante
+    if (batch.quantity > 0) {
+      return this.prisma.$transaction(async (tx) => {
+        const quantityChange = -batch.quantity;
+
+        // Mettre à jour la quantité totale sur la variante
+        const updatedVariant = await tx.productVariant.update({
+          where: { id: batch.variantId },
+          data: { quantityInStock: { decrement: batch.quantity } },
+        });
+
+        // Créer un mouvement de stock de type PERTE (LOSS)
+        await tx.stockMovement.create({
+          data: {
+            variantId: batch.variantId,
+            businessId: (await this.verifyOwnership(batch.variantId, userId))
+              .businessId,
+            performedById: userId,
+            type: 'LOSS',
+            quantityChange,
+            newQuantity: updatedVariant.quantityInStock,
+            reason: `Suppression du lot #${batchId.substring(0, 8)}`,
+          },
+        });
+
+        // Supprimer le lot
+        await tx.productBatch.delete({ where: { id: batchId } });
+      });
+    } else {
+      // Le lot est vide, on peut le supprimer sans impacter le stock
+      await this.prisma.productBatch.delete({ where: { id: batchId } });
+    }
+
+    return { message: 'Lot supprimé avec succès.' };
   }
 }
