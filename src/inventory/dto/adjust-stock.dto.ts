@@ -14,6 +14,7 @@ const allowedManualMovementTypes = [
   MovementType.ADJUSTMENT,
   MovementType.LOSS,
   MovementType.RETURN,
+  MovementType.EXPIRATION,
 ];
 
 export class AdjustStockDto {
