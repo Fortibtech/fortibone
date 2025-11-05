@@ -50,6 +50,13 @@ export class TopSellingProductItem {
     example: 2398.8,
   })
   totalRevenue: number;
+
+  @ApiProperty({
+    description:
+      "Pourcentage du chiffre d'affaires total de la période généré par cette variante",
+    example: 25.5,
+  })
+  revenuePercentage: number;
 }
 
 // DTO pour les ventes par catégorie
