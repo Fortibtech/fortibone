@@ -41,6 +41,7 @@ import {
   CustomerStatsDto,
   RecentOrderItemDto,
 } from './dto/customer-profile.dto';
+import { TopSellingProductItem } from './dto/sales-details.dto';
 
 @Injectable()
 export class AnalyticsService {
@@ -232,6 +233,19 @@ export class AnalyticsService {
     //   createdAt: dateFilter,
     // };
 
+    // --- NOUVELLE ÉTAPE : CALCULER LE CA TOTAL D'ABORD ---
+    const totalSalesAggregates = await this.prisma.order.aggregate({
+      where: {
+        businessId: businessId,
+        type: OrderType.SALE,
+        status: { in: [OrderStatus.DELIVERED, OrderStatus.COMPLETED] },
+        createdAt: dateFilter,
+      },
+      _sum: { totalAmount: true },
+    });
+    const totalRevenueForPeriod =
+      totalSalesAggregates._sum?.totalAmount?.toNumber() || 0;
+
     // Requêtes exécutées en parallèle pour la performance
     const [salesByPeriodRaw, topSellingProductsRaw, salesByProductCategoryRaw] =
       await this.prisma.$transaction([
@@ -315,17 +329,36 @@ export class AnalyticsService {
       `,
       ]);
 
+    // --- MISE À JOUR DU MAPPING DES RÉSULTATS ---
+    const topSellingProducts: TopSellingProductItem[] =
+      topSellingProductsRaw.map((item) => {
+        const totalRevenue = item.totalRevenue.toNumber();
+        // Calcul du pourcentage
+        const revenuePercentage =
+          totalRevenueForPeriod > 0
+            ? parseFloat(
+                ((totalRevenue / totalRevenueForPeriod) * 100).toFixed(2),
+              )
+            : 0;
+
+        return {
+          variantId: item.variantId,
+          sku: item.sku,
+          productName: item.productName,
+          variantImageUrl: item.variantImageUrl,
+          totalQuantitySold: Number(item.totalQuantitySold),
+          totalRevenue: totalRevenue,
+          revenuePercentage: revenuePercentage, // Ajouter le pourcentage
+        };
+      });
+
     return {
       salesByPeriod: salesByPeriodRaw.map((item) => ({
         ...item,
         totalAmount: item.totalAmount.toNumber(),
         totalItems: Number(item.totalItems), // Convert BigInt to Number
       })),
-      topSellingProducts: topSellingProductsRaw.map((item) => ({
-        ...item,
-        totalQuantitySold: Number(item.totalQuantitySold),
-        totalRevenue: item.totalRevenue.toNumber(),
-      })),
+      topSellingProducts: topSellingProducts,
       salesByProductCategory: salesByProductCategoryRaw.map((item) => ({
         ...item,
         totalRevenue: item.totalRevenue.toNumber(),
