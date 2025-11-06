@@ -15,6 +15,7 @@ import {
   Prisma,
   PrismaClient,
   User,
+  WalletTransaction,
   WalletTransactionStatus,
   WalletTransactionType,
 } from '@prisma/client';
@@ -29,6 +30,7 @@ import {
   DepositMethod,
   DepositProvider,
 } from 'src/payments/interfaces/deposit-provider.interface';
+import { TransferDto } from './dto/transfer.dto';
 
 // Interface pour les paramètres des méthodes de crédit/débit, pour plus de clarté
 interface WalletMovementParams {
@@ -383,6 +385,124 @@ export class WalletService {
           'Erreur lors de la création de la transaction de retrait.',
         );
       }
+    });
+  }
+
+  /**
+   * Transfère de l'argent du portefeuille de l'expéditeur vers celui du destinataire.
+   * Gère la conversion de devises et assure l'atomicité de l'opération.
+   * @param senderId - L'ID de l'utilisateur qui envoie l'argent.
+   * @param dto - Les détails du transfert (montant et destinataire).
+   * @returns La transaction de transfert de l'expéditeur.
+   */
+  async transfer(
+    senderId: string,
+    dto: TransferDto,
+  ): Promise<WalletTransaction> {
+    const { amount, recipientIdentifier } = dto;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Récupérer les informations de l'expéditeur et du destinataire
+      const sender = await tx.user.findUnique({
+        where: { id: senderId },
+        include: { wallet: { include: { currency: true } } },
+      });
+
+      const recipient = await tx.user.findFirst({
+        where: {
+          OR: [{ id: recipientIdentifier }, { email: recipientIdentifier }],
+        },
+        include: { wallet: { include: { currency: true } } },
+      });
+
+      if (!recipient) {
+        throw new NotFoundException('Utilisateur destinataire non trouvé.');
+      }
+
+      if (!sender) {
+        throw new NotFoundException('Utilisateur envoyeur non trouvé');
+      }
+      if (sender.id === recipient.id) {
+        throw new BadRequestException(
+          "Vous ne pouvez pas vous transférer de l'argent à vous-même.",
+        );
+      }
+
+      // Assurer que les portefeuilles existent
+      const senderWallet =
+        sender.wallet || (await this.findOrCreateUserWallet(sender.id));
+      const recipientWallet =
+        recipient.wallet || (await this.findOrCreateUserWallet(recipient.id));
+
+      // 2. Vérifier le solde de l'expéditeur
+      if (senderWallet.balance.toNumber() < amount) {
+        throw new BadRequestException('Solde du portefeuille insuffisant.');
+      }
+
+      // 3. Calculer les montants après conversion de devise
+      const senderAmount = new Prisma.Decimal(-amount); // Montant du débit
+      let recipientAmount: Prisma.Decimal;
+
+      if (senderWallet.currencyId === recipientWallet.currencyId) {
+        recipientAmount = new Prisma.Decimal(amount); // Pas de conversion
+      } else {
+        // Logique de conversion
+        const senderCurrency = sender.wallet!.currency;
+        const recipientCurrency = recipient.wallet!.currency;
+
+        // Convertir le montant de la devise de l'expéditeur vers la devise de base (EUR), puis vers la devise du destinataire.
+        const amountInBaseCurrency = new Prisma.Decimal(amount).div(
+          senderCurrency.exchangeRate,
+        );
+        recipientAmount = amountInBaseCurrency.mul(
+          recipientCurrency.exchangeRate,
+        );
+      }
+
+      // 4. Créer les deux transactions de portefeuille
+      const senderTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: senderWallet.id,
+          type: 'TRANSFER',
+          amount: senderAmount,
+          status: 'COMPLETED',
+          description: `Transfert vers ${recipient.firstName} ${recipient.lastName || ''}`,
+        },
+      });
+
+      const recipientTransaction = await tx.walletTransaction.create({
+        data: {
+          walletId: recipientWallet.id,
+          type: 'TRANSFER',
+          amount: recipientAmount.toDecimalPlaces(2), // Arrondir à 2 décimales
+          status: 'COMPLETED',
+          description: `Transfert reçu de ${sender.firstName} ${sender.lastName || ''}`,
+        },
+      });
+
+      // 5. Lier les deux transactions pour la traçabilité
+      await tx.walletTransaction.update({
+        where: { id: senderTransaction.id },
+        data: { transferPeerTransactionId: recipientTransaction.id },
+      });
+      await tx.walletTransaction.update({
+        where: { id: recipientTransaction.id },
+        data: { transferPeerTransactionId: senderTransaction.id },
+      });
+
+      // 6. Mettre à jour les soldes des deux portefeuilles
+      await tx.wallet.update({
+        where: { id: senderWallet.id },
+        data: { balance: { decrement: new Prisma.Decimal(amount) } },
+      });
+      await tx.wallet.update({
+        where: { id: recipientWallet.id },
+        data: { balance: { increment: recipientAmount.toDecimalPlaces(2) } },
+      });
+
+      // TODO: Envoyer des notifications à l'expéditeur et au destinataire
+
+      return senderTransaction;
     });
   }
 }

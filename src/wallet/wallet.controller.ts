@@ -33,6 +33,7 @@ import {
 import { DepositDto } from './dto/deposit.dto';
 import { QueryWalletTransactionsDto } from './dto/query-wallet-transactions.dto';
 import { WithdrawalDto } from './dto/withdrawal.dto';
+import { TransferDto } from './dto/transfer.dto';
 
 @ApiTags('Wallet')
 @Controller('wallet')
@@ -140,5 +141,26 @@ export class WalletController {
     @Query() dto: QueryWalletTransactionsDto,
   ) {
     return this.walletService.findUserTransactions(req.user.id, dto);
+  }
+
+  @Post('transfer')
+  @ApiOperation({
+    summary: "Transférer de l'argent à un autre utilisateur FortiBone",
+    description:
+      "Le montant est débité du portefeuille de l'expéditeur et crédité sur celui du destinataire, avec gestion de la conversion de devise.",
+  })
+  @ApiResponse({
+    status: 201,
+    type: WalletTransactionResponseDto,
+    description:
+      "Transfert effectué avec succès. Retourne la transaction de débit de l'expéditeur.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Solde insuffisant ou destinataire invalide.',
+  })
+  @ApiResponse({ status: 404, description: 'Destinataire non trouvé.' })
+  async transfer(@Request() req: { user: User }, @Body() dto: TransferDto) {
+    return this.walletService.transfer(req.user.id, dto);
   }
 }

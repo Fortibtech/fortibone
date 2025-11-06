@@ -482,6 +482,12 @@ model WalletTransaction {
   // Pour lier à une transaction de paiement externe (ex: dépôt Stripe)
   relatedPaymentTransaction    PaymentTransaction? @relation(fields: [relatedPaymentTransactionId], references: [id], onDelete: SetNull)
   relatedPaymentTransactionId  String?             @unique @map("related_payment_transaction_id")
+
+  // --- NOUVEAUX CHAMPS POUR LES TRANSFERTS ---
+  // Pour lier les deux côtés d'un transfert
+  transferPeerTransaction   WalletTransaction? @relation("WalletTransfer", fields: [transferPeerTransactionId], references: [id], onDelete: NoAction)
+  transferPeerTransactionId String?            @unique @map("transfer_peer_transaction_id")
+  transferTransaction       WalletTransaction? @relation("WalletTransfer")
 }
 
 // ----------------------------------------
@@ -603,6 +609,7 @@ enum WalletTransactionType {
   PAYMENT    // Paiement d'une commande via le portefeuille
   REFUND     // Remboursement d'une commande vers le portefeuille
   ADJUSTMENT // Ajustement manuel par un admin
+  TRANSFER   // NOUVEAU TYPE POUR LES TRANSFERTS P2P
 }
 
 enum WalletTransactionStatus {
