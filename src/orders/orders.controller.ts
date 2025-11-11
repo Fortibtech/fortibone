@@ -30,6 +30,8 @@ import {
   OrderResponseDto,
   PaginatedOrdersResponseDto,
 } from './dto/order-responses.dto';
+import { ShipOrderDto } from './dto/ship-order.dto';
+import { UpdateOrderLineStatusDto } from './dto/update-order-line-status.dto';
 
 @ApiTags('Orders')
 @Controller() // Préfixe appliqué au niveau des méthodes pour une meilleure organisation
@@ -206,5 +208,48 @@ export class OrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.ordersService.updateStatus(id, req.user.id, dto);
+  }
+
+  // --- NOUVEAUX ENDPOINTS ---
+  @Patch(':id/ship')
+  @ApiOperation({
+    summary:
+      'Marquer une commande comme expédiée et ajouter les informations de suivi (Owner requis)',
+  })
+  @ApiResponse({
+    status: 200,
+    /* type: OrderResponseDto */ description:
+      'La commande a été marquée comme expédiée.',
+  })
+  shipOrder(
+    @Request() req: { user: User },
+    @Param('id') id: string,
+    @Body() dto: ShipOrderDto,
+  ) {
+    return this.ordersService.shipOrder(id, req.user.id, dto);
+  }
+
+  @Patch(':orderId/lines/:lineId/status')
+  @ApiOperation({
+    summary:
+      "Mettre à jour le statut d'une ligne de commande spécifique (Owner requis)",
+  })
+  @ApiResponse({
+    status: 200,
+    /* type: OrderLineResponseDto */ description:
+      'Le statut de la ligne a été mis à jour.',
+  })
+  updateLineStatus(
+    @Request() req: { user: User },
+    @Param('orderId') orderId: string,
+    @Param('lineId') lineId: string,
+    @Body() dto: UpdateOrderLineStatusDto,
+  ) {
+    return this.ordersService.updateLineStatus(
+      orderId,
+      lineId,
+      req.user.id,
+      dto,
+    );
   }
 }

@@ -24,6 +24,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { WalletService } from 'src/wallet/wallet.service';
 import { ShipOrderDto } from './dto/ship-order.dto';
+import { UpdateOrderLineStatusDto } from './dto/update-order-line-status.dto';
 
 @Injectable()
 export class OrdersService {
@@ -574,6 +575,45 @@ export class OrdersService {
           ? new Date(dto.estimatedDeliveryDate)
           : undefined,
       },
+    });
+  }
+
+  async updateLineStatus(
+    orderId: string,
+    lineId: string,
+    userId: string,
+    dto: UpdateOrderLineStatusDto,
+  ) {
+    const order = await this.findOne(orderId, { id: userId } as any);
+    if (order.business.ownerId !== userId) {
+      throw new ForbiddenException('Action non autorisée.');
+    }
+
+    const line = await this.prisma.orderLine.findUnique({
+      where: { id: lineId },
+    });
+    if (!line || line.orderId !== orderId) {
+      throw new NotFoundException(
+        'Ligne de commande non trouvée pour cette commande.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Mettre à jour la ligne
+      const updatedLine = await tx.orderLine.update({
+        where: { id: lineId },
+        data: { status: dto.status },
+      });
+
+      // Logique métier pour mettre à jour la commande principale
+      if (dto.status === 'PREPARING' && order.status === 'CONFIRMED') {
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: 'PROCESSING' },
+        });
+      }
+
+      return updatedLine;
     });
   }
 }
