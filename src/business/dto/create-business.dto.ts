@@ -1,11 +1,23 @@
 // src/business/dto/create-business.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessType, CommerceType } from '@prisma/client';
 import {
+  BusinessType,
+  CommerceType,
+  PriceRange,
+  Civility,
+} from '@prisma/client';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEmail,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
+  IsPositive,
   IsString,
   IsUrl,
   Max,
@@ -51,6 +63,14 @@ export class CreateBusinessDto {
     example: '+33123456789',
     description: "Le numéro de téléphone de contact de l'entreprise",
   })
+  @ApiPropertyOptional({
+    description: "Le code postal de l'entreprise",
+    example: '75001',
+  })
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
   @IsOptional()
   @IsString()
   phoneNumber?: string;
@@ -134,4 +154,130 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsEnum(CommerceType)
   commerceType?: CommerceType;
+
+  // --- INFORMATIONS GÉNÉRALES ---
+  @ApiPropertyOptional({
+    description: "Date de création de l'entreprise (format YYYY-MM-DD)",
+  })
+  @IsOptional()
+  @IsDateString()
+  creationDate?: string;
+
+  @ApiPropertyOptional({ description: "Email de contact de l'entreprise" })
+  @IsOptional()
+  @IsEmail()
+  businessEmail?: string;
+
+  @ApiPropertyOptional({ description: "Téléphone de contact de l'entreprise" })
+  @IsOptional()
+  @IsString()
+  businessPhone?: string;
+
+  // --- CONTACT PRINCIPAL ---
+  @ApiPropertyOptional({ description: 'Prénom du contact principal' })
+  @IsOptional()
+  @IsString()
+  contactFirstName?: string;
+
+  @ApiPropertyOptional({ description: 'Nom du contact principal' })
+  @IsOptional()
+  @IsString()
+  contactLastName?: string;
+
+  @ApiPropertyOptional({
+    enum: Civility,
+    description: 'Civilité du contact principal',
+  })
+  @IsOptional()
+  @IsEnum(Civility)
+  contactCivility?: Civility;
+
+  @ApiPropertyOptional({
+    description: "Fonction du contact principal dans l'entreprise",
+  })
+  @IsOptional()
+  @IsString()
+  contactFunction?: string;
+
+  // --- INFORMATIONS MÉTIER ---
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Liste des catégories de produits proposées',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productCategories?: string[];
+
+  @ApiPropertyOptional({
+    enum: PriceRange,
+    description: 'Gamme de prix des produits',
+  })
+  @IsOptional()
+  @IsEnum(PriceRange)
+  priceRange?: PriceRange;
+
+  @ApiPropertyOptional({
+    description: 'Volume de production (ex: "Petite série")',
+  })
+  @IsOptional()
+  @IsString()
+  productionVolume?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Liste des zones de livraison',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  deliveryZones?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Délai de livraison moyen (ex: "3-5 jours")',
+  })
+  @IsOptional()
+  @IsString()
+  avgDeliveryTime?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Liste des conditions de paiement acceptées',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  paymentConditions?: string[];
+
+  @ApiPropertyOptional({ description: 'Quantité minimale de commande' })
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  minOrderQuantity?: number;
+
+  @ApiPropertyOptional({ description: 'Échantillon disponible (oui/non)' })
+  @IsOptional()
+  @IsBoolean()
+  sampleAvailable?: boolean;
+
+  // --- PRÉSENTATION & PRÉFÉRENCES ---
+  @ApiPropertyOptional({ description: "Description détaillée de l'entreprise" })
+  @IsOptional()
+  @IsString()
+  detailedDescription?: string;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    example: { facebook: 'url', linkedin: 'url' },
+    additionalProperties: { type: 'string' },
+    description: 'Liens vers les réseaux sociaux',
+  })
+  @IsOptional()
+  @IsObject()
+  socialLinks?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: "Références clients de l'entreprise" })
+  @IsOptional()
+  @IsString()
+  clientReferences?: string;
 }

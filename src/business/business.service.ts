@@ -67,6 +67,8 @@ export class BusinessService {
 
     const businessData = {
       ...rest,
+      creationDate: rest.creationDate ? new Date(rest.creationDate) : undefined, // Conversion de la date
+
       owner: { connect: { id: ownerId } },
       currency: { connect: { id: finalCurrencyId } },
     };
@@ -190,7 +192,13 @@ export class BusinessService {
 
     return this.prisma.business.update({
       where: { id },
-      data: updateBusinessDto,
+      data: {
+        ...updateBusinessDto,
+        // Conversion de la date si elle est fournie
+        creationDate: updateBusinessDto.creationDate
+          ? new Date(updateBusinessDto.creationDate)
+          : undefined,
+      },
     });
   }
 

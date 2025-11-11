@@ -86,6 +86,7 @@ model Business {
   logoUrl       String?                               @map("logo_url")
   coverImageUrl String?                               @map("cover_image_url")
   address       String?
+
   phoneNumber   String?                               @map("phone_number")
   location      Unsupported("geometry(Point, 4326)")? // Pour la géolocalisation (PostGIS)
   isVerified    Boolean                               @default(false) @map("is_verified")
@@ -97,7 +98,29 @@ model Business {
   websiteUrl    String?   @map("website_url")
   activitySector String?  @map("activity_sector") // Secteur d'activité (ex: "Mode", "Alimentation", "Tech")
   commerceType  CommerceType @default(PHYSICAL) @map("commerce_type") // Type de commerce
+  postalCode    String?   @map("postal_code")
   // -----------------------------
+
+  // --- NOUVEAU : CONTACT PRINCIPAL ---
+  contactFirstName String?       @map("contact_first_name")
+  contactLastName  String?       @map("contact_last_name")
+  contactCivility  Civility?     // M, Mme, Mlle
+  contactFunction  String?       @map("contact_function")
+
+  // --- NOUVEAU : INFORMATIONS MÉTIER ---
+  productCategories String[]      // Liste de noms de catégories (simple pour commencer)
+  priceRange        PriceRange?   // Bas de gamme, Moyenne gamme, Haut de gamme
+  productionVolume  String?       @map("production_volume") // Ex: "Petite série", "Grande série"
+  deliveryZones     String[]      // Liste de noms de zones (pays, villes)
+  avgDeliveryTime   String?       @map("avg_delivery_time") // Ex: "3-5 jours", "1 semaine"
+  paymentConditions String[]      // Liste de conditions de paiement
+  minOrderQuantity  Int?          @map("min_order_quantity")
+  sampleAvailable   Boolean?      @map("sample_available")
+
+  // --- NOUVEAU : PRÉSENTATION & PRÉFÉRENCES ---
+  detailedDescription String? @db.Text @map("detailed_description") // Utiliser le type TEXT pour les descriptions longues
+  socialLinks         Json?   @map("social_links") // Utiliser JSON pour stocker {facebook: "url", linkedin: "url", ...}
+  clientReferences    String? @db.Text @map("client_references")
 
   currency   Currency? @relation(fields: [currencyId], references: [id])
   currencyId String?   @map("currency_id")
@@ -624,4 +647,18 @@ enum CommerceType {
   PHYSICAL    // Commerce physique
   DIGITAL     // Commerce en ligne / E-commerce
   HYBRID      // Les deux
+}
+
+// --- NOUVELLES ÉNUMÉRATIONS ---
+enum Civility {
+  MR   // Monsieur
+  MRS  // Madame
+  MS   // Mademoiselle
+}
+
+enum PriceRange {
+  ENTRY_LEVEL // Bas de gamme
+  MID_RANGE   // Moyenne gamme
+  HIGH_END    // Haut de gamme
+  LUXURY      // Luxe
 }

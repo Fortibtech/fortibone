@@ -10,6 +10,8 @@ import {
   SalesUnit,
   MovementType,
   CommerceType,
+  PriceRange,
+  Civility,
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import {
@@ -215,6 +217,28 @@ async function main() {
       commerceType: CommerceType.HYBRID,
       // --------------
       isVerified: true,
+
+       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      businessEmail: 'contact@bobshop.com',
+      creationDate: new Date('2022-05-10'),
+      contactFirstName: 'Bob',
+      contactLastName: 'Proprio',
+      contactCivility: Civility.MR,
+      contactFunction: 'Gérant',
+      productCategories: ['Vêtements', 'Accessoires'],
+      priceRange: PriceRange.MID_RANGE,
+      productionVolume: 'Moyenne série',
+      deliveryZones: ['France', 'Belgique', 'Suisse'],
+      avgDeliveryTime: '3-5 jours ouvrés',
+      paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
+      minOrderQuantity: 1,
+      sampleAvailable: true,
+      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      socialLinks: {
+        facebook: 'https://facebook.com/bobshop',
+        instagram: 'https://instagram.com/bobshop',
+      },
+      clientReferences: 'Recommandé par le "Guide de la Mode Éthique 2025".',
     },
   });
   await prisma.$executeRaw`
@@ -240,6 +264,28 @@ async function main() {
       websiteUrl: 'https://legoutdumonde.com',
       activitySector: 'Restauration traditionnelle',
       commerceType: CommerceType.PHYSICAL,
+
+       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      businessEmail: 'contact@bobshop.com',
+      creationDate: new Date('2022-05-10'),
+      contactFirstName: 'Bob',
+      contactLastName: 'Proprio',
+      contactCivility: Civility.MR,
+      contactFunction: 'Gérant',
+      productCategories: ['Vêtements', 'Accessoires'],
+      priceRange: PriceRange.MID_RANGE,
+      productionVolume: 'Moyenne série',
+      deliveryZones: ['France', 'Belgique', 'Suisse'],
+      avgDeliveryTime: '3-5 jours ouvrés',
+      paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
+      minOrderQuantity: 1,
+      sampleAvailable: true,
+      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      socialLinks: {
+        facebook: 'https://facebook.com/bobshop',
+        instagram: 'https://instagram.com/bobshop',
+      },
+      clientReferences: 'Recommandé par le "Guide de la Mode Éthique 2025".',
     },
   });
   await prisma.$executeRaw`
@@ -265,6 +311,28 @@ async function main() {
       websiteUrl: 'https://supplierexpress-b2b.com',
       activitySector: 'Commerce de gros',
       commerceType: CommerceType.DIGITAL,
+
+       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      businessEmail: 'contact@bobshop.com',
+      creationDate: new Date('2022-05-10'),
+      contactFirstName: 'Bob',
+      contactLastName: 'Proprio',
+      contactCivility: Civility.MR,
+      contactFunction: 'Gérant',
+      productCategories: ['Vêtements', 'Accessoires'],
+      priceRange: PriceRange.MID_RANGE,
+      productionVolume: 'Moyenne série',
+      deliveryZones: ['France', 'Belgique', 'Suisse'],
+      avgDeliveryTime: '3-5 jours ouvrés',
+      paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
+      minOrderQuantity: 1,
+      sampleAvailable: true,
+      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      socialLinks: {
+        facebook: 'https://facebook.com/bobshop',
+        instagram: 'https://instagram.com/bobshop',
+      },
+      clientReferences: 'Recommandé par le "Guide de la Mode Éthique 2025".',
     },
   });
   console.log('Businesses seeded.');
