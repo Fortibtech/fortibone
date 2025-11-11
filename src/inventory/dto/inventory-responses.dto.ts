@@ -27,13 +27,13 @@ export class PaginatedBatchesResponseDto {
 
   @ApiProperty()
   total: number;
-  
+
   @ApiProperty()
   page: number;
-  
+
   @ApiProperty()
   limit: number;
-  
+
   @ApiProperty()
   totalPages: number;
 }
@@ -48,13 +48,13 @@ export class InventoryVariantResponseDto {
 
   @ApiProperty({ type: 'number' })
   price: Prisma.Decimal;
-  
+
   @ApiProperty({ type: 'number' })
   purchasePrice: Prisma.Decimal;
 
   @ApiProperty()
   quantityInStock: number;
-  
+
   @ApiPropertyOptional()
   product?: {
     name: string;
@@ -67,16 +67,16 @@ export class InventoryVariantResponseDto {
 export class PaginatedInventoryResponseDto {
   @ApiProperty({ type: [InventoryVariantResponseDto] })
   data: InventoryVariantResponseDto[];
-  
+
   @ApiProperty()
   total: number;
-  
+
   @ApiProperty()
   page: number;
-  
+
   @ApiProperty()
   limit: number;
-  
+
   @ApiProperty()
   totalPages: number;
 }
@@ -90,7 +90,6 @@ export class StockMovementResponseDto {
   type: MovementType;
 
   @ApiProperty()
-
   quantityChange: number;
 
   @ApiProperty()
@@ -98,16 +97,16 @@ export class StockMovementResponseDto {
 
   @ApiPropertyOptional()
   reason?: string;
-  
+
   @ApiProperty()
   createdAt: Date;
-  
+
   @ApiPropertyOptional()
   performedBy?: {
     id: string;
     firstName: string;
   };
-  
+
   @ApiPropertyOptional()
   order?: {
     id: string;

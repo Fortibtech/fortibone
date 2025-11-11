@@ -13,7 +13,6 @@ import { Decimal } from '@prisma/client/runtime/library';
 @Injectable()
 export class KartaPayDepositProvider implements DepositProvider {
   public readonly method = DepositMethod.KARTAPAY;
-  
 
   constructor(private readonly kartaPayProvider: KartaPayProvider) {}
 

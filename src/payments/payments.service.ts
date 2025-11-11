@@ -25,6 +25,7 @@ import {
 import { OrdersService } from 'src/orders/orders.service'; // Nous aurons besoin du service des commandes
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { WalletService } from 'src/wallet/wallet.service';
+import { OrderHistoryService } from 'src/orders/order-history.service';
 
 @Injectable()
 export class PaymentsService {
@@ -38,6 +39,8 @@ export class PaymentsService {
     private readonly ordersService: OrdersService,
     @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
     private readonly walletService: WalletService,
+    @Inject(forwardRef(() => OrderHistoryService)) // S'assurer que le service est disponible
+    private readonly orderHistoryService: OrderHistoryService,
   ) {
     this.paymentProviders = paymentProvidersMap;
   }
@@ -239,12 +242,22 @@ export class PaymentsService {
 
         // Mettre à jour le statut de la commande si le paiement est un succès
         if (webhookResult.status === 'SUCCESS') {
-          return this.ordersService.updateOrderStatusLogic(
+          const updatedOrder = this.ordersService.updateOrderStatusLogic(
             tx,
             webhookResult.orderId,
             'PAID',
             transaction.id,
           );
+
+          // --- ENREGISTRER L'ÉVÉNEMENT DE PAIEMENT RÉUSSI ---
+          await this.orderHistoryService.recordStatusChange(
+            tx,
+            webhookResult.orderId,
+            'PAID',
+            null, // Déclenché par le système (webhook)
+            `Paiement de ${webhookResult.amount} ${webhookResult.currency} confirmé via ${webhookResult.provider}.`,
+          );
+          return updatedOrder;
         } else if (webhookResult.status === 'FAILED') {
           return this.ordersService.updateOrderStatusLogic(
             tx,

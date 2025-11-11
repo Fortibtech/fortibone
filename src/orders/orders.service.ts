@@ -16,12 +16,16 @@ import {
   OrderStatus,
   PaymentMethodEnum,
   WalletTransaction,
+  Order,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { WalletService } from 'src/wallet/wallet.service';
+import { ShipOrderDto } from './dto/ship-order.dto';
+import { UpdateOrderLineStatusDto } from './dto/update-order-line-status.dto';
+import { OrderHistoryService } from './order-history.service';
 
 @Injectable()
 export class OrdersService {
@@ -30,6 +34,7 @@ export class OrdersService {
     private readonly inventoryService: InventoryService, // INJECTER
     @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
     private readonly walletService: WalletService,
+    private readonly orderHistoryService: OrderHistoryService, // INJECTER
   ) {}
 
   async create(dto: CreateOrderDto, user: User) {
@@ -43,7 +48,8 @@ export class OrdersService {
     // Démarrer une transaction pour garantir l'atomicité de la commande
     return this.prisma.$transaction(async (tx) => {
       // 1. Valider les lignes de commande et calculer le montant total
-      let totalAmount = 0;
+      let subTotal = 0;
+      // let totalAmount = 0;
       const orderLinesData: Prisma.OrderLineCreateManyOrderInput[] = [];
 
       for (const line of dto.lines) {
@@ -66,12 +72,25 @@ export class OrdersService {
         }
 
         const price = variant.price.toNumber(); // Utiliser le prix actuel de la variante
-        totalAmount += price * line.quantity;
+        subTotal += price * line.quantity;
+        // totalAmount += price * line.quantity;
         orderLinesData.push({
           variantId: line.variantId,
           quantity: line.quantity,
           price: price, // Enregistrer le prix au moment de la commande
         });
+      }
+
+      const shippingFee = new Prisma.Decimal(dto.shippingFee || 0);
+      const discountAmount = new Prisma.Decimal(dto.discountAmount || 0);
+      const totalAmount = new Prisma.Decimal(subTotal)
+        .minus(discountAmount)
+        .plus(shippingFee);
+
+      if (totalAmount.isNegative()) {
+        throw new BadRequestException(
+          'Le montant total de la commande ne peut pas être négatif.',
+        );
       }
 
       // --- NOUVELLE LOGIQUE POUR LE PAIEMENT PAR PORTEFEUILLE ---
@@ -82,7 +101,7 @@ export class OrdersService {
 
       if (dto.useWallet && dto.type === OrderType.SALE) {
         const wallet = await this.walletService.findOrCreateUserWallet(user.id);
-        if (wallet.balance.toNumber() < totalAmount) {
+        if (wallet.balance.toNumber() < totalAmount.toNumber()) {
           throw new BadRequestException(
             'Solde du portefeuille insuffisant pour effectuer cet achat.',
           );
@@ -91,7 +110,7 @@ export class OrdersService {
         // Débiter le portefeuille
         const { transaction } = await this.walletService.debit({
           walletId: wallet.id,
-          amount: totalAmount,
+          amount: totalAmount.toNumber(),
           description: `Paiement pour la commande #${`ORD-${Date.now()}`}`, // Utiliser un placeholder
           tx,
         });
@@ -107,6 +126,9 @@ export class OrdersService {
         orderNumber: `ORD-${Date.now()}`,
         type: dto.type,
         status: orderStatus, // Utiliser le statut déterminé
+        subTotal,
+        shippingFee,
+        discountAmount,
         totalAmount,
         notes: dto.notes,
         business: { connect: { id: dto.businessId } },
@@ -161,6 +183,15 @@ export class OrdersService {
         }
       }
 
+      // --- ENREGISTRER LE PREMIER ÉVÉNEMENT DE L'HISTORIQUE ---
+      await this.orderHistoryService.recordStatusChange(
+        tx,
+        order.id,
+        order.status,
+        user.id,
+        'Commande créée.',
+      );
+
       return this.findOne(order.id, tx); // Retourner la commande complète
     });
   }
@@ -173,6 +204,13 @@ export class OrdersService {
         lines: { include: { variant: { include: { product: true } } } },
         customer: { select: { id: true, firstName: true } },
         business: true,
+        statusHistory: {
+          // --- INCLURE L'HISTORIQUE ---
+          orderBy: { timestamp: 'asc' }, // Du plus ancien au plus récent
+          include: {
+            triggeredBy: { select: { id: true, firstName: true } },
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException('Commande non trouvée.');
@@ -464,6 +502,22 @@ export class OrdersService {
       );
     }
 
+    // On s'assure que cette méthode ne peut pas être utilisée pour passer à SHIPPED
+    if (dto.status === OrderStatus.SHIPPED) {
+      throw new BadRequestException(
+        "Utilisez l'endpoint dédié /ship pour expédier une commande.",
+      );
+    }
+
+    // --- ENREGISTRER L'ÉVÉNEMENT DE MISE À JOUR ---
+    await this.orderHistoryService.recordStatusChange(
+      this.prisma, // Utiliser le client Prisma de base car ce n'est pas une transaction complexe
+      orderId,
+      dto.status,
+      userId,
+      `Statut mis à jour par l'utilisateur.`,
+    );
+
     // Gérer le cas spécial de l'annulation
     if (
       dto.status === OrderStatus.CANCELLED &&
@@ -479,7 +533,7 @@ export class OrdersService {
   }
 
   // --- NOUVELLE FONCTION POUR L'ANNULATION ---
-  private async cancelOrder(order: any, userId: string) {
+  private async cancelOrder(order: Order, userId: string) {
     // Une commande ne peut être annulée que si elle n'est pas déjà expédiée, livrée ou complétée.
     const cancellableStatuses = [
       OrderStatus.PENDING,
@@ -518,6 +572,86 @@ export class OrdersService {
         message:
           'La commande a été annulée avec succès et le stock a été réapprovisionné.',
       };
+    });
+  }
+
+  // --- NOUVELLE MÉTHODE DÉDIÉE À L'EXPÉDITION ---
+  async shipOrder(orderId: string, userId: string, dto: ShipOrderDto) {
+    const order = await this.findOne(orderId, { id: userId } as any); // Utiliser le user simplifié
+
+    if (order.business.ownerId !== userId) {
+      throw new ForbiddenException('Action non autorisée.');
+    }
+
+    const allowedStatuses = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING];
+    if (!allowedStatuses.includes(order.status)) {
+      throw new BadRequestException(
+        `Une commande avec le statut ${order.status} ne peut pas être expédiée.`,
+      );
+    }
+
+    const updatedOrder = this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: OrderStatus.SHIPPED,
+        shippingMode: dto.shippingMode, // Assurez-vous d'ajouter ce champ au DTO si nécessaire
+        shippingCarrier: dto.shippingCarrier,
+        shippingTrackingNumber: dto.shippingTrackingNumber,
+        shippingDate: new Date(dto.shippingDate),
+        estimatedDeliveryDate: dto.estimatedDeliveryDate
+          ? new Date(dto.estimatedDeliveryDate)
+          : undefined,
+      },
+    });
+
+    // --- ENREGISTRER L'ÉVÉNEMENT D'EXPÉDITION ---
+    await this.orderHistoryService.recordStatusChange(
+      this.prisma,
+      orderId,
+      OrderStatus.SHIPPED,
+      userId,
+      `Colis expédié via ${dto.shippingCarrier}. Suivi: ${dto.shippingTrackingNumber || 'N/A'}`,
+    );
+
+    return updatedOrder;
+  }
+
+  async updateLineStatus(
+    orderId: string,
+    lineId: string,
+    userId: string,
+    dto: UpdateOrderLineStatusDto,
+  ) {
+    const order = await this.findOne(orderId, { id: userId } as any);
+    if (order.business.ownerId !== userId) {
+      throw new ForbiddenException('Action non autorisée.');
+    }
+
+    const line = await this.prisma.orderLine.findUnique({
+      where: { id: lineId },
+    });
+    if (!line || line.orderId !== orderId) {
+      throw new NotFoundException(
+        'Ligne de commande non trouvée pour cette commande.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Mettre à jour la ligne
+      const updatedLine = await tx.orderLine.update({
+        where: { id: lineId },
+        data: { status: dto.status },
+      });
+
+      // Logique métier pour mettre à jour la commande principale
+      if (dto.status === 'PREPARING' && order.status === 'CONFIRMED') {
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: 'PROCESSING' },
+        });
+      }
+
+      return updatedLine;
     });
   }
 }

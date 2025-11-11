@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { InventoryModule } from '../inventory/inventory.module'; // IMPORTER
 import { PaymentsModule } from 'src/payments/payments.module';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { OrderHistoryService } from './order-history.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
     forwardRef(() => WalletModule), // Ajouter
   ], // AJOUTER InventoryModule
   controllers: [OrdersController],
-  providers: [OrdersService],
-  exports: [OrdersService],
+  providers: [OrdersService, OrderHistoryService],
+  exports: [OrdersService, OrderHistoryService],
 })
 export class OrdersModule {}

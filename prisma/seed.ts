@@ -218,7 +218,7 @@ async function main() {
       // --------------
       isVerified: true,
 
-       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      // --- NOUVEAUX CHAMPS AJOUTÉS ---
       businessEmail: 'contact@bobshop.com',
       creationDate: new Date('2022-05-10'),
       contactFirstName: 'Bob',
@@ -233,7 +233,8 @@ async function main() {
       paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
       minOrderQuantity: 1,
       sampleAvailable: true,
-      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      detailedDescription:
+        'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
       socialLinks: {
         facebook: 'https://facebook.com/bobshop',
         instagram: 'https://instagram.com/bobshop',
@@ -265,7 +266,7 @@ async function main() {
       activitySector: 'Restauration traditionnelle',
       commerceType: CommerceType.PHYSICAL,
 
-       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      // --- NOUVEAUX CHAMPS AJOUTÉS ---
       businessEmail: 'contact@bobshop.com',
       creationDate: new Date('2022-05-10'),
       contactFirstName: 'Bob',
@@ -280,7 +281,8 @@ async function main() {
       paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
       minOrderQuantity: 1,
       sampleAvailable: true,
-      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      detailedDescription:
+        'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
       socialLinks: {
         facebook: 'https://facebook.com/bobshop',
         instagram: 'https://instagram.com/bobshop',
@@ -312,7 +314,7 @@ async function main() {
       activitySector: 'Commerce de gros',
       commerceType: CommerceType.DIGITAL,
 
-       // --- NOUVEAUX CHAMPS AJOUTÉS ---
+      // --- NOUVEAUX CHAMPS AJOUTÉS ---
       businessEmail: 'contact@bobshop.com',
       creationDate: new Date('2022-05-10'),
       contactFirstName: 'Bob',
@@ -327,7 +329,8 @@ async function main() {
       paymentConditions: ['Carte bancaire', 'Portefeuille FortiBone'],
       minOrderQuantity: 1,
       sampleAvailable: true,
-      detailedDescription: 'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
+      detailedDescription:
+        'La Boutique de Bob est votre destination pour des vêtements de qualité, éthiques et durables. Nous proposons des collections pour toute la famille.',
       socialLinks: {
         facebook: 'https://facebook.com/bobshop',
         instagram: 'https://instagram.com/bobshop',
