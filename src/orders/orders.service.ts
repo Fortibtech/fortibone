@@ -25,6 +25,7 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { WalletService } from 'src/wallet/wallet.service';
 import { ShipOrderDto } from './dto/ship-order.dto';
 import { UpdateOrderLineStatusDto } from './dto/update-order-line-status.dto';
+import { OrderHistoryService } from './order-history.service';
 
 @Injectable()
 export class OrdersService {
@@ -33,6 +34,7 @@ export class OrdersService {
     private readonly inventoryService: InventoryService, // INJECTER
     @Inject(forwardRef(() => WalletService)) // Gérer la dépendance circulaire
     private readonly walletService: WalletService,
+    private readonly orderHistoryService: OrderHistoryService, // INJECTER
   ) {}
 
   async create(dto: CreateOrderDto, user: User) {
@@ -181,6 +183,15 @@ export class OrdersService {
         }
       }
 
+      // --- ENREGISTRER LE PREMIER ÉVÉNEMENT DE L'HISTORIQUE ---
+      await this.orderHistoryService.recordStatusChange(
+        tx,
+        order.id,
+        order.status,
+        user.id,
+        'Commande créée.',
+      );
+
       return this.findOne(order.id, tx); // Retourner la commande complète
     });
   }
@@ -193,6 +204,13 @@ export class OrdersService {
         lines: { include: { variant: { include: { product: true } } } },
         customer: { select: { id: true, firstName: true } },
         business: true,
+        statusHistory: {
+          // --- INCLURE L'HISTORIQUE ---
+          orderBy: { timestamp: 'asc' }, // Du plus ancien au plus récent
+          include: {
+            triggeredBy: { select: { id: true, firstName: true } },
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException('Commande non trouvée.');
@@ -491,6 +509,15 @@ export class OrdersService {
       );
     }
 
+    // --- ENREGISTRER L'ÉVÉNEMENT DE MISE À JOUR ---
+    await this.orderHistoryService.recordStatusChange(
+      this.prisma, // Utiliser le client Prisma de base car ce n'est pas une transaction complexe
+      orderId,
+      dto.status,
+      userId,
+      `Statut mis à jour par l'utilisateur.`,
+    );
+
     // Gérer le cas spécial de l'annulation
     if (
       dto.status === OrderStatus.CANCELLED &&
@@ -563,7 +590,7 @@ export class OrdersService {
       );
     }
 
-    return this.prisma.order.update({
+    const updatedOrder = this.prisma.order.update({
       where: { id: orderId },
       data: {
         status: OrderStatus.SHIPPED,
@@ -576,6 +603,17 @@ export class OrdersService {
           : undefined,
       },
     });
+
+    // --- ENREGISTRER L'ÉVÉNEMENT D'EXPÉDITION ---
+    await this.orderHistoryService.recordStatusChange(
+      this.prisma,
+      orderId,
+      OrderStatus.SHIPPED,
+      userId,
+      `Colis expédié via ${dto.shippingCarrier}. Suivi: ${dto.shippingTrackingNumber || 'N/A'}`,
+    );
+
+    return updatedOrder;
   }
 
   async updateLineStatus(

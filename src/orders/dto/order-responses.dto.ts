@@ -56,6 +56,19 @@ class OrderLineResponseDto {
   };
 }
 
+class OrderStatusHistoryDto {
+  @ApiProperty()
+  id: string;
+  @ApiProperty({ enum: OrderStatus })
+  status: OrderStatus;
+  @ApiPropertyOptional()
+  notes?: string;
+  @ApiProperty()
+  timestamp: Date;
+  @ApiPropertyOptional()
+  triggeredBy?: { id: string; firstName: string; };
+}
+
 // DTO de réponse pour une commande complète (pour findOne)
 export class OrderResponseDto {
   @ApiProperty()
@@ -102,6 +115,9 @@ export class OrderResponseDto {
 
   @ApiProperty({ type: [OrderLineResponseDto] })
   lines: OrderLineResponseDto[];
+
+  @ApiProperty({ type: [OrderStatusHistoryDto] })
+  statusHistory: OrderStatusHistoryDto[];
 }
 
 // DTO pour une réponse paginée de commandes
