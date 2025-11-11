@@ -409,6 +409,18 @@ model Order {
   transactionId   String?            @unique @map("transaction_id") // ID final de la transaction validée
   // ------------------------------------
 
+   // --- NOUVEAUX CHAMPS POUR LA VENTILATION DES COÛTS ---
+  subTotal       Decimal     @default(0.0) @map("sub_total")
+  discountAmount Decimal     @default(0.0) @map("discount_amount")
+  shippingFee    Decimal     @default(0.0) @map("shipping_fee")
+
+  // --- NOUVEAUX CHAMPS POUR LA LIVRAISON ---
+  shippingTrackingNumber String?   @map("shipping_tracking_number")
+  shippingMode           String?   @map("shipping_mode")
+  shippingCarrier        String?   @map("shipping_carrier")
+  shippingDate           DateTime? @map("shipping_date")
+  estimatedDeliveryDate  DateTime? @map("estimated_delivery_date")
+
   payments PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
 
   lines          OrderLine[]
@@ -569,7 +581,8 @@ enum OrderStatus {
   PENDING_APPROVAL // Nouveau: Pour les commandes B2B en attente d'acceptation par le fournisseur
   PENDING_REFUND // Nouveau: Remboursement en cours
   REFUNDED // Nouveau: Entièrement remboursé
-  PARTIALLY_REFUNDED // Nouveau: Partiellement remboursé  
+  PARTIALLY_REFUNDED // Nouveau: Partiellement remboursé
+  ARCHIVED // NOUVEAU STATUT
 }
 
 // Nouvelle Enum pour les méthodes de paiement

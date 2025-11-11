@@ -9,9 +9,11 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -88,4 +90,18 @@ export class CreateOrderDto {
   @IsOptional()
   @IsBoolean()
   useWallet?: boolean = false;
+
+  @ApiPropertyOptional({ description: 'Frais de livraison pour la commande' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shippingFee?: number;
+
+  @ApiPropertyOptional({
+    description: 'Montant de la remise appliquée à la commande',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountAmount?: number;
 }

@@ -16,12 +16,14 @@ import {
   OrderStatus,
   PaymentMethodEnum,
   WalletTransaction,
+  Order,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
 import { QueryOrdersDto } from './dto/query-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { WalletService } from 'src/wallet/wallet.service';
+import { ShipOrderDto } from './dto/ship-order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -43,7 +45,8 @@ export class OrdersService {
     // Démarrer une transaction pour garantir l'atomicité de la commande
     return this.prisma.$transaction(async (tx) => {
       // 1. Valider les lignes de commande et calculer le montant total
-      let totalAmount = 0;
+      let subTotal = 0;
+      // let totalAmount = 0;
       const orderLinesData: Prisma.OrderLineCreateManyOrderInput[] = [];
 
       for (const line of dto.lines) {
@@ -66,12 +69,25 @@ export class OrdersService {
         }
 
         const price = variant.price.toNumber(); // Utiliser le prix actuel de la variante
-        totalAmount += price * line.quantity;
+        subTotal += price * line.quantity;
+        // totalAmount += price * line.quantity;
         orderLinesData.push({
           variantId: line.variantId,
           quantity: line.quantity,
           price: price, // Enregistrer le prix au moment de la commande
         });
+      }
+
+      const shippingFee = new Prisma.Decimal(dto.shippingFee || 0);
+      const discountAmount = new Prisma.Decimal(dto.discountAmount || 0);
+      const totalAmount = new Prisma.Decimal(subTotal)
+        .minus(discountAmount)
+        .plus(shippingFee);
+
+      if (totalAmount.isNegative()) {
+        throw new BadRequestException(
+          'Le montant total de la commande ne peut pas être négatif.',
+        );
       }
 
       // --- NOUVELLE LOGIQUE POUR LE PAIEMENT PAR PORTEFEUILLE ---
@@ -82,7 +98,7 @@ export class OrdersService {
 
       if (dto.useWallet && dto.type === OrderType.SALE) {
         const wallet = await this.walletService.findOrCreateUserWallet(user.id);
-        if (wallet.balance.toNumber() < totalAmount) {
+        if (wallet.balance.toNumber() < totalAmount.toNumber()) {
           throw new BadRequestException(
             'Solde du portefeuille insuffisant pour effectuer cet achat.',
           );
@@ -91,7 +107,7 @@ export class OrdersService {
         // Débiter le portefeuille
         const { transaction } = await this.walletService.debit({
           walletId: wallet.id,
-          amount: totalAmount,
+          amount: totalAmount.toNumber(),
           description: `Paiement pour la commande #${`ORD-${Date.now()}`}`, // Utiliser un placeholder
           tx,
         });
@@ -107,6 +123,9 @@ export class OrdersService {
         orderNumber: `ORD-${Date.now()}`,
         type: dto.type,
         status: orderStatus, // Utiliser le statut déterminé
+        subTotal,
+        shippingFee,
+        discountAmount,
         totalAmount,
         notes: dto.notes,
         business: { connect: { id: dto.businessId } },
@@ -464,6 +483,13 @@ export class OrdersService {
       );
     }
 
+    // On s'assure que cette méthode ne peut pas être utilisée pour passer à SHIPPED
+    if (dto.status === OrderStatus.SHIPPED) {
+      throw new BadRequestException(
+        "Utilisez l'endpoint dédié /ship pour expédier une commande.",
+      );
+    }
+
     // Gérer le cas spécial de l'annulation
     if (
       dto.status === OrderStatus.CANCELLED &&
@@ -479,7 +505,7 @@ export class OrdersService {
   }
 
   // --- NOUVELLE FONCTION POUR L'ANNULATION ---
-  private async cancelOrder(order: any, userId: string) {
+  private async cancelOrder(order: Order, userId: string) {
     // Une commande ne peut être annulée que si elle n'est pas déjà expédiée, livrée ou complétée.
     const cancellableStatuses = [
       OrderStatus.PENDING,
@@ -518,6 +544,36 @@ export class OrdersService {
         message:
           'La commande a été annulée avec succès et le stock a été réapprovisionné.',
       };
+    });
+  }
+
+  // --- NOUVELLE MÉTHODE DÉDIÉE À L'EXPÉDITION ---
+  async shipOrder(orderId: string, userId: string, dto: ShipOrderDto) {
+    const order = await this.findOne(orderId, { id: userId } as any); // Utiliser le user simplifié
+
+    if (order.business.ownerId !== userId) {
+      throw new ForbiddenException('Action non autorisée.');
+    }
+
+    const allowedStatuses = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING];
+    if (!allowedStatuses.includes(order.status)) {
+      throw new BadRequestException(
+        `Une commande avec le statut ${order.status} ne peut pas être expédiée.`,
+      );
+    }
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: OrderStatus.SHIPPED,
+        shippingMode: dto.shippingMode, // Assurez-vous d'ajouter ce champ au DTO si nécessaire
+        shippingCarrier: dto.shippingCarrier,
+        shippingTrackingNumber: dto.shippingTrackingNumber,
+        shippingDate: new Date(dto.shippingDate),
+        estimatedDeliveryDate: dto.estimatedDeliveryDate
+          ? new Date(dto.estimatedDeliveryDate)
+          : undefined,
+      },
     });
   }
 }
