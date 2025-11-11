@@ -8,10 +8,16 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { AddInvoicePaymentDto } from './dto/add-invoice-payment.dto';
 import { Prisma, User } from '@prisma/client';
+import { PdfService } from 'src/pdf/pdf.service';
+import { UploaderService } from 'src/uploader/uploader.service';
 
 @Injectable()
 export class InvoicingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pdfService: PdfService, // INJECTER
+    private readonly uploaderService: UploaderService, // INJECTER
+  ) {}
 
   private async verifyOrderOwnership(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({
@@ -34,7 +40,18 @@ export class InvoicingService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { invoice: true },
+      include: {
+        invoice: true,
+        customer: true,
+        business: true,
+        lines: {
+          include: {
+            variant: {
+              include: { product: true },
+            },
+          },
+        },
+      },
     });
 
     if (order.invoice) {
@@ -43,7 +60,8 @@ export class InvoicingService {
       );
     }
 
-    return this.prisma.invoice.create({
+    // 1. Créer la facture en BDD (sans le pdfUrl pour l'instant)
+    const invoice = await this.prisma.invoice.create({
       data: {
         orderId: order.id,
         invoiceNumber: `INV-${order.orderNumber}`,
@@ -53,6 +71,35 @@ export class InvoicingService {
         shippingFee: order.shippingFee,
         totalAmount: order.totalAmount,
       },
+    });
+
+    // 2. Générer le PDF en mémoire
+    const pdfBuffer = await this.pdfService.generateInvoicePdf({
+      ...invoice,
+      order,
+    });
+
+    // 3. Simuler un fichier pour l'UploaderService
+    const pdfFile: Express.Multer.File = {
+      buffer: pdfBuffer,
+      originalname: `facture-${invoice.invoiceNumber}.pdf`,
+      mimetype: 'application/pdf',
+      fieldname: 'file',
+      encoding: '7bit',
+      size: pdfBuffer.length,
+      stream: null,
+      destination: null,
+      filename: null,
+      path: null,
+    };
+
+    // 4. Uploader le PDF et récupérer l'URL
+    const { url: pdfUrl } = await this.uploaderService.upload(pdfFile);
+
+    // 5. Mettre à jour la facture avec l'URL du PDF
+    return this.prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { pdfUrl: pdfUrl },
     });
   }
 

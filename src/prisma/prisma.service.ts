@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
+  invoice: any;
   async onModuleInit() {
     // Se connecte à la base de données au démarrage du module
     await this.$connect();

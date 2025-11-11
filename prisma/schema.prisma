@@ -64,6 +64,7 @@ model User {
   businesses       Business[]
   stockMovements   StockMovement[]
   favoriteProducts FavoriteProduct[]
+  orderStatusTriggered OrderStatusHistory[]
 }
 
 // NOUVEAU MODÈLE POUR LES DEVISES
@@ -423,6 +424,8 @@ model Order {
 
   invoice Invoice? // Relation 1-1 vers la facture
 
+  statusHistory OrderStatusHistory[] // Nouvelle relation vers l'historique
+
   payments PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
 
   lines          OrderLine[]
@@ -440,6 +443,21 @@ model OrderLine {
   orderId   String         @map("order_id")
   variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
   variantId String         @map("variant_id")
+}
+
+// --- NOUVEAU MODÈLE POUR L'HISTORIQUE DES STATUTS ---
+model OrderStatusHistory {
+  id        String    @id @default(cuid())
+  status    OrderStatus
+  notes     String?   // Ex: "Statut mis à jour par l'employé Bob", "Paiement reçu via Stripe"
+  timestamp DateTime  @default(now())
+
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String    @map("order_id")
+
+  // L'utilisateur qui a déclenché le changement (peut être un client, un employé, ou null pour un webhook)
+  triggeredBy User?     @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  triggeredById String? @map("triggered_by_id")
 }
 
 // --- NOUVEAU MODÈLE POUR LE SUIVI DES TRANSACTIONS DE PAIEMENT ---
