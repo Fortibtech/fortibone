@@ -17,6 +17,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { WalletModule } from './wallet/wallet.module';
+import { InvoicingModule } from './invoicing/invoicing.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -38,6 +39,7 @@ import { WalletModule } from './wallet/wallet.module';
     AnalyticsModule,
     RestaurantsModule,
     WalletModule,
+    InvoicingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

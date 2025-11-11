@@ -421,6 +421,8 @@ model Order {
   shippingDate           DateTime? @map("shipping_date")
   estimatedDeliveryDate  DateTime? @map("estimated_delivery_date")
 
+  invoice Invoice? // Relation 1-1 vers la facture
+
   payments PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
 
   lines          OrderLine[]
@@ -523,6 +525,39 @@ model WalletTransaction {
   transferPeerTransaction   WalletTransaction? @relation("WalletTransfer", fields: [transferPeerTransactionId], references: [id], onDelete: NoAction)
   transferPeerTransactionId String?            @unique @map("transfer_peer_transaction_id")
   transferTransaction       WalletTransaction? @relation("WalletTransfer")
+}
+
+// --- NOUVEAUX MODÈLES POUR LA FACTURATION ---
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique @map("invoice_number")
+  status        InvoiceStatus @default(DRAFT)
+  issueDate     DateTime @default(now()) @map("issue_date")
+  dueDate       DateTime @map("due_date")
+  pdfUrl        String?  @map("pdf_url")
+  notes         String?
+  
+  // Agrégats de la commande (dénormalisés pour la facture)
+  subTotal      Decimal
+  discountAmount Decimal  @default(0.0)
+  shippingFee   Decimal  @default(0.0)
+  totalAmount   Decimal
+  
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String   @unique @map("order_id") // Une seule facture par commande
+
+  payments InvoicePayment[]
+}
+
+model InvoicePayment {
+  id             String      @id @default(cuid())
+  amountPaid     Decimal     @map("amount_paid")
+  paymentDate    DateTime    @default(now()) @map("payment_date")
+  paymentMethod  String      // Ex: "Portefeuille", "Stripe", "Espèces"
+  transactionRef String?     @unique @map("transaction_ref") // Référence (ex: ID de PaymentTransaction)
+
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId String  @map("invoice_id")
 }
 
 // ----------------------------------------
@@ -674,4 +709,14 @@ enum PriceRange {
   MID_RANGE   // Moyenne gamme
   HIGH_END    // Haut de gamme
   LUXURY      // Luxe
+}
+
+
+// --- NOUVELLE ENUM POUR LE STATUT DES FACTURES ---
+enum InvoiceStatus {
+  DRAFT   // Brouillon, non finalisée
+  SENT    // Envoyée au client
+  PAID    // Entièrement payée
+  PARTIALLY_PAID // Partiellement payée
+  VOID    // Annulée
 }
