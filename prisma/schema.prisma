@@ -89,6 +89,7 @@ model Business {
   address       String?
 
   phoneNumber   String?                               @map("phone_number")
+  businessEmail String?                               @map("business_email")
   location      Unsupported("geometry(Point, 4326)")? // Pour la géolocalisation (PostGIS)
   isVerified    Boolean                               @default(false) @map("is_verified")
   createdAt     DateTime                              @default(now()) @map("created_at")
@@ -122,6 +123,8 @@ model Business {
   detailedDescription String? @db.Text @map("detailed_description") // Utiliser le type TEXT pour les descriptions longues
   socialLinks         Json?   @map("social_links") // Utiliser JSON pour stocker {facebook: "url", linkedin: "url", ...}
   clientReferences    String? @db.Text @map("client_references")
+
+  creationDate       DateTime?        @map("creation_date")
 
   currency   Currency? @relation(fields: [currencyId], references: [id])
   currencyId String?   @map("currency_id")
@@ -437,6 +440,7 @@ model OrderLine {
   id       String  @id @default(cuid())
   quantity Int
   price    Decimal // Prix unitaire au moment de la commande
+  status   OrderStatus
 
   // Relations
   order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)

@@ -7,9 +7,10 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { AddInvoicePaymentDto } from './dto/add-invoice-payment.dto';
-import { Prisma, User } from '@prisma/client';
+import { InvoiceStatus, Prisma, User } from '@prisma/client';
 import { PdfService } from 'src/pdf/pdf.service';
 import { UploaderService } from 'src/uploader/uploader.service';
+import { Readable } from 'stream';
 
 @Injectable()
 export class InvoicingService {
@@ -87,10 +88,10 @@ export class InvoicingService {
       fieldname: 'file',
       encoding: '7bit',
       size: pdfBuffer.length,
-      stream: null,
-      destination: null,
-      filename: null,
-      path: null,
+      stream: new Readable().wrap(Readable.from(pdfBuffer)),
+      destination: '', 
+      filename: `facture-${invoice.invoiceNumber}.pdf`,
+      path: './', // Valeur factice
     };
 
     // 4. Uploader le PDF et récupérer l'URL

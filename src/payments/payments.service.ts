@@ -254,7 +254,7 @@ export class PaymentsService {
             tx,
             webhookResult.orderId,
             'PAID',
-            null, // Déclenché par le système (webhook)
+            undefined, // Déclenché par le système (webhook)
             `Paiement de ${webhookResult.amount} ${webhookResult.currency} confirmé via ${webhookResult.provider}.`,
           );
           return updatedOrder;

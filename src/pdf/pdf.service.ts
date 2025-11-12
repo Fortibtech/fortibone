@@ -1,6 +1,15 @@
 // src/pdf/pdf.service.ts
 import { Injectable } from '@nestjs/common';
-import { Invoice, Order, ProductVariant, User, Business } from '@prisma/client';
+import {
+  Order,
+  User,
+  Business,
+  OrderLine,
+  ProductVariant,
+  Product,
+  Invoice,
+} from '@prisma/client';
+
 import * as PDFDocument from 'pdfkit';
 
 // Type étendu pour les relations
@@ -37,7 +46,7 @@ export class PdfService {
       const business = invoiceData.order.business;
       doc.text(business.name, { align: 'left' });
       doc.text(business.address || '');
-      doc.text(business.businessPhone || '');
+      doc.text(business.phoneNumber || '');
       doc.text(business.businessEmail || '');
 
       doc.text(`Facture #: ${invoiceData.invoiceNumber}`, { align: 'right' });
@@ -87,10 +96,15 @@ export class PdfService {
           width: 60,
           align: 'right',
         });
-        doc.text(`${(line.price * line.quantity).toFixed(2)} €`, totalX, y, {
-          width: 70,
-          align: 'right',
-        });
+        doc.text(
+          `${(Number(line.price) * Number(line.quantity)).toFixed(2)} €`,
+          totalX,
+          y,
+          {
+            width: 70,
+            align: 'right',
+          },
+        );
         i++;
       }
       doc.moveDown(i + 2);
@@ -126,12 +140,10 @@ export class PdfService {
       doc.font('Helvetica');
 
       // Pied de page
-      doc
-        .fontSize(8)
-        .text('Merci pour votre confiance.', 50, 750, {
-          align: 'center',
-          width: 500,
-        });
+      doc.fontSize(8).text('Merci pour votre confiance.', 50, 750, {
+        align: 'center',
+        width: 500,
+      });
 
       doc.end();
     });

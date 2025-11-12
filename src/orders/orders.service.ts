@@ -17,6 +17,7 @@ import {
   PaymentMethodEnum,
   WalletTransaction,
   Order,
+  OrderLine,
 } from '@prisma/client';
 import { InventoryService } from '../inventory/inventory.service';
 import { QueryOrdersDto } from './dto/query-orders.dto';
@@ -77,6 +78,7 @@ export class OrdersService {
         orderLinesData.push({
           variantId: line.variantId,
           quantity: line.quantity,
+          status: 'PENDING',
           price: price, // Enregistrer le prix au moment de la commande
         });
       }
@@ -533,14 +535,17 @@ export class OrdersService {
   }
 
   // --- NOUVELLE FONCTION POUR L'ANNULATION ---
-  private async cancelOrder(order: Order, userId: string) {
+  private async cancelOrder(
+    order: Order & { lines: OrderLine[] },
+    userId: string,
+  ) {
     // Une commande ne peut être annulée que si elle n'est pas déjà expédiée, livrée ou complétée.
     const cancellableStatuses = [
       OrderStatus.PENDING,
       OrderStatus.CONFIRMED,
       OrderStatus.PROCESSING,
     ];
-    if (!cancellableStatuses.includes(order.status)) {
+    if (!cancellableStatuses.includes(order.status as any)) {
       throw new BadRequestException(
         `Une commande avec le statut ${order.status} ne peut pas être annulée.`,
       );
@@ -584,7 +589,7 @@ export class OrdersService {
     }
 
     const allowedStatuses = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING];
-    if (!allowedStatuses.includes(order.status)) {
+    if (!allowedStatuses.includes(order.status as any)) {
       throw new BadRequestException(
         `Une commande avec le statut ${order.status} ne peut pas être expédiée.`,
       );
@@ -644,7 +649,7 @@ export class OrdersService {
       });
 
       // Logique métier pour mettre à jour la commande principale
-      if (dto.status === 'PREPARING' && order.status === 'CONFIRMED') {
+      if ((dto.status as string) === 'PREPARING' && (order.status as string) === 'CONFIRMED') {
         await tx.order.update({
           where: { id: orderId },
           data: { status: 'PROCESSING' },

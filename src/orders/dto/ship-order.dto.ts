@@ -34,4 +34,10 @@ export class ShipOrderDto {
   @IsOptional()
   @IsDateString()
   estimatedDeliveryDate?: string;
+
+  @ApiProperty({
+    description: "Mode d'expédition utilisé pour la commande",
+    example: 'Standard',
+  })
+  shippingMode: string;
 }
