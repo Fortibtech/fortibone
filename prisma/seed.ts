@@ -728,6 +728,7 @@ async function main() {
             variantId: tShirtMBlue.id,
             quantity: 1,
             price: new Prisma.Decimal(19.99),
+            status: OrderStatus.COMPLETED,
           },
         ],
       },
@@ -767,6 +768,7 @@ async function main() {
           {
             variantId: smartphoneSilver.id,
             quantity: 1,
+            status: OrderStatus.DELIVERED,
             price: new Prisma.Decimal(3500.0),
           }, // 1 lot
         ],

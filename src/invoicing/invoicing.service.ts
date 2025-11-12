@@ -55,6 +55,10 @@ export class InvoicingService {
       },
     });
 
+    if(!order) {
+      throw new NotFoundException('Commande non trouvée.');
+    }
+
     if (order.invoice) {
       throw new BadRequestException(
         'Une facture existe déjà pour cette commande.',
@@ -77,7 +81,7 @@ export class InvoicingService {
     // 2. Générer le PDF en mémoire
     const pdfBuffer = await this.pdfService.generateInvoicePdf({
       ...invoice,
-      order,
+      order: order as any,
     });
 
     // 3. Simuler un fichier pour l'UploaderService
