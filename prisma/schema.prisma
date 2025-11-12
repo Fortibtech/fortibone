@@ -1,179 +1,454 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"] // Nécessaire pour PostGIS si vous faites de la géolocalisation avancée
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [postgis] // Activer PostGIS pour les fonctions de géolocalisation
+  extensions = [postgis]
 }
-
-// ----------------------------------------
-// ---       MODÈLES DE BASE            ---
-// ----------------------------------------
 
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
-  password        String
-  firstName       String   @map("first_name")
-  lastName        String?  @map("last_name")
-  phoneNumber     String?  @map("phone_number")
-  profileImageUrl String?  @map("profile_image_url")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  // Le profil principal de l'utilisateur (ce qu'il est par défaut)
-  // Un 'PARTICULIER' peut aussi devenir membre d'une entreprise.
-  profileType ProfileType @default(PARTICULIER)
-
-  wallet Wallet? // Relation 1-1 vers le portefeuille
-
-
-  // --- CHAMPS AJOUTÉS POUR LA VÉRIFICATION ET LA RÉINITIALISATION ---
-  isEmailVerified             Boolean   @default(false) @map("is_email_verified")
-  otp                         String? // One-Time Password pour la vérification email
-  otpExpiresAt                DateTime? @map("otp_expires_at")
-  lastOtpSentAt               DateTime? @map("last_otp_sent_at")
-  passwordResetToken          String?   @map("password_reset_token")
-  passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at")
-  // -----------------------------------------------------------------
-
-  // --- NOUVEAUX CHAMPS DE PROFIL ---
-  dateOfBirth DateTime? @map("date_of_birth")
-  country     String?
-  city        String?
-  gender      Gender?
-  // ---------------------------------
-
-  // --- CHAMPS AJOUTÉS POUR STRIPE CONNECT ---
-  stripeAccountId         String?  @unique @map("stripe_account_id")
-  stripeAccountSetupComplete Boolean  @default(false) @map("stripe_account_setup_complete")
-
-  // Relations
-  memberships      BusinessMember[] // Les entreprises dont cet utilisateur est membre/employé
-  invitations      Invitation[] // Les entreprises dont cet utilisateur est membre/employé
-  ordersAsCustomer Order[]           @relation("CustomerOrders") // Commandes passées en tant que client
-  ordersAsEmployee Order[]           @relation("EmployeeActions") // Actions (achats) faites en tant qu'employé
-  reviews          Review[]
-  businessReviews  BusinessReview[]
-  businesses       Business[]
-  stockMovements   StockMovement[]
-  favoriteProducts FavoriteProduct[]
-  orderStatusTriggered OrderStatusHistory[]
+  id                          String               @id @default(cuid())
+  email                       String               @unique
+  password                    String
+  firstName                   String               @map("first_name")
+  lastName                    String?              @map("last_name")
+  phoneNumber                 String?              @map("phone_number")
+  profileImageUrl             String?              @map("profile_image_url")
+  createdAt                   DateTime             @default(now()) @map("created_at")
+  updatedAt                   DateTime             @updatedAt @map("updated_at")
+  profileType                 ProfileType          @default(PARTICULIER)
+  isEmailVerified             Boolean              @default(false) @map("is_email_verified")
+  otp                         String?
+  otpExpiresAt                DateTime?            @map("otp_expires_at")
+  passwordResetToken          String?              @map("password_reset_token")
+  passwordResetTokenExpiresAt DateTime?            @map("password_reset_token_expires_at")
+  city                        String?
+  country                     String?
+  dateOfBirth                 DateTime?            @map("date_of_birth")
+  gender                      Gender?
+  lastOtpSentAt               DateTime?            @map("last_otp_sent_at")
+  stripeAccountId             String?              @unique @map("stripe_account_id")
+  stripeAccountSetupComplete  Boolean              @default(false) @map("stripe_account_setup_complete")
+  businesses                  Business[]
+  memberships                 BusinessMember[]
+  businessReviews             BusinessReview[]
+  favoriteProducts            FavoriteProduct[]
+  invitations                 Invitation[]
+  ordersAsCustomer            Order[]              @relation("CustomerOrders")
+  ordersAsEmployee            Order[]              @relation("EmployeeActions")
+  orderStatusTriggered        OrderStatusHistory[]
+  reviews                     Review[]
+  stockMovements              StockMovement[]
+  wallet                      Wallet?
 }
 
-// NOUVEAU MODÈLE POUR LES DEVISES
 model Currency {
-  id           String @id @default(cuid())
-  code         String @unique // Code ISO 4217, ex: "EUR", "USD"
-  name         String // ex: "Euro", "US Dollar"
-  symbol       String // ex: "€", "$"
-  exchangeRate Float  @default(1) @map("exchange_rate") // Taux pour convertir 1 unité de cette devise vers la devise de BASE du système
-
+  id           String     @id @default(cuid())
+  code         String     @unique
+  name         String
+  symbol       String
+  exchangeRate Float      @default(1) @map("exchange_rate")
   businesses   Business[]
   wallets      Wallet[]
 }
 
 model Business {
-  id            String                                @id @default(cuid())
-  name          String // Nom du commerce, fournisseur ou restaurant
-  description   String?
-  type          BusinessType // COMMERCANT, FOURNISSEUR, RESTAURATEUR
-  logoUrl       String?                               @map("logo_url")
-  coverImageUrl String?                               @map("cover_image_url")
-  address       String?
-
-  phoneNumber   String?                               @map("phone_number")
-  location      Unsupported("geometry(Point, 4326)")? // Pour la géolocalisation (PostGIS)
-  isVerified    Boolean                               @default(false) @map("is_verified")
-  createdAt     DateTime                              @default(now()) @map("created_at")
-  updatedAt     DateTime                              @updatedAt @map("updated_at")
-
-  // --- NOUVEAUX CHAMPS AJOUTÉS ---
-  siret         String?   @unique // Numéro SIRET (ou équivalent local), doit être unique
-  websiteUrl    String?   @map("website_url")
-  activitySector String?  @map("activity_sector") // Secteur d'activité (ex: "Mode", "Alimentation", "Tech")
-  commerceType  CommerceType @default(PHYSICAL) @map("commerce_type") // Type de commerce
-  postalCode    String?   @map("postal_code")
-  // -----------------------------
-
-  // --- NOUVEAU : CONTACT PRINCIPAL ---
-  contactFirstName String?       @map("contact_first_name")
-  contactLastName  String?       @map("contact_last_name")
-  contactCivility  Civility?     // M, Mme, Mlle
-  contactFunction  String?       @map("contact_function")
-
-  // --- NOUVEAU : INFORMATIONS MÉTIER ---
-  productCategories String[]      // Liste de noms de catégories (simple pour commencer)
-  priceRange        PriceRange?   // Bas de gamme, Moyenne gamme, Haut de gamme
-  productionVolume  String?       @map("production_volume") // Ex: "Petite série", "Grande série"
-  deliveryZones     String[]      // Liste de noms de zones (pays, villes)
-  avgDeliveryTime   String?       @map("avg_delivery_time") // Ex: "3-5 jours", "1 semaine"
-  paymentConditions String[]      // Liste de conditions de paiement
-  minOrderQuantity  Int?          @map("min_order_quantity")
-  sampleAvailable   Boolean?      @map("sample_available")
-
-  // --- NOUVEAU : PRÉSENTATION & PRÉFÉRENCES ---
-  detailedDescription String? @db.Text @map("detailed_description") // Utiliser le type TEXT pour les descriptions longues
-  socialLinks         Json?   @map("social_links") // Utiliser JSON pour stocker {facebook: "url", linkedin: "url", ...}
-  clientReferences    String? @db.Text @map("client_references")
-
-  currency   Currency? @relation(fields: [currencyId], references: [id])
-  currencyId String?   @map("currency_id")
-
-  averageRating Float @default(0) @map("average_rating")
-  reviewCount   Int   @default(0) @map("review_count")
-
-  openingHours OpeningHour[]
-  reviews      BusinessReview[]
-  invitations  Invitation[]
-
-  // Relations
-  owner           User              @relation(fields: [ownerId], references: [id], onDelete: Restrict) // Un propriétaire ne peut être supprimé s'il a une entreprise
-  ownerId         String            @map("owner_id")
-  members         BusinessMember[]
-  products        Product[]
-  ordersReceived  Order[]           @relation("BusinessOrders") // Commandes reçues (ventes, réservations)
-  ordersPlaced    Order[]           @relation("BusinessPurchases") // Commandes passées (achats)
-  stockMovements  StockMovement[]
-  restaurantTables RestaurantTable[]
-  menus            Menu[]
+  id                  String                   @id @default(cuid())
+  name                String
+  description         String?
+  type                BusinessType
+  logoUrl             String?                  @map("logo_url")
+  coverImageUrl       String?                  @map("cover_image_url")
+  address             String?
+  phoneNumber         String?                  @map("phone_number")
+  location            Unsupported("geometry")?
+  isVerified          Boolean                  @default(false) @map("is_verified")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  ownerId             String                   @map("owner_id")
+  averageRating       Float                    @default(0) @map("average_rating")
+  currencyId          String?                  @map("currency_id")
+  reviewCount         Int                      @default(0) @map("review_count")
+  activitySector      String?                  @map("activity_sector")
+  commerceType        CommerceType             @default(PHYSICAL) @map("commerce_type")
+  siret               String?                  @unique
+  websiteUrl          String?                  @map("website_url")
+  avgDeliveryTime     String?                  @map("avg_delivery_time")
+  clientReferences    String?                  @map("client_references")
+  contactCivility     Civility?
+  contactFirstName    String?                  @map("contact_first_name")
+  contactFunction     String?                  @map("contact_function")
+  contactLastName     String?                  @map("contact_last_name")
+  deliveryZones       String[]
+  detailedDescription String?                  @map("detailed_description")
+  minOrderQuantity    Int?                     @map("min_order_quantity")
+  paymentConditions   String[]
+  postalCode          String?                  @map("postal_code")
+  priceRange          PriceRange?
+  productCategories   String[]
+  productionVolume    String?                  @map("production_volume")
+  sampleAvailable     Boolean?                 @map("sample_available")
+  socialLinks         Json?                    @map("social_links")
+  currency            Currency?                @relation(fields: [currencyId], references: [id])
+  owner               User                     @relation(fields: [ownerId], references: [id])
+  members             BusinessMember[]
+  reviews             BusinessReview[]
+  invitations         Invitation[]
+  menus               Menu[]
+  openingHours        OpeningHour[]
+  ordersReceived      Order[]                  @relation("BusinessOrders")
+  ordersPlaced        Order[]                  @relation("BusinessPurchases")
+  products            Product[]
+  restaurantTables    RestaurantTable[]
+  stockMovements      StockMovement[]
 }
 
-// --- NOUVEAU MODÈLE POUR LES HORAIRES D'OUVERTURE ---
 model OpeningHour {
-  id        String    @id @default(cuid())
-  dayOfWeek DayOfWeek @map("day_of_week")
-  openTime  String    @map("open_time") // Format "HH:mm"
-  closeTime String    @map("close_time") // Format "HH:mm"
+  id         String    @id @default(cuid())
+  dayOfWeek  DayOfWeek @map("day_of_week")
+  openTime   String    @map("open_time")
+  closeTime  String    @map("close_time")
+  businessId String    @map("business_id")
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String   @map("business_id")
-
-  @@unique([businessId, dayOfWeek, openTime, closeTime]) // Empêche les doublons exacts
+  @@unique([businessId, dayOfWeek, openTime, closeTime])
 }
 
-// --- NOUVEAU MODÈLE POUR LES AVIS ---
 model BusinessReview {
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  businessId String   @map("business_id")
+  authorId   String   @map("author_id")
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, authorId])
+}
+
+model BusinessMember {
+  id         String     @id @default(cuid())
+  role       MemberRole
+  userId     String     @map("user_id")
+  businessId String     @map("business_id")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+}
+
+model Category {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  description String?
+  imageUrl    String?             @map("image_url")
+  attributes  CategoryAttribute[]
+  products    Product[]
+}
+
+model CategoryAttribute {
+  id            String                  @id @default(cuid())
+  name          String
+  categoryId    String                  @map("category_id")
+  category      Category                @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  variantValues VariantAttributeValue[]
+
+  @@unique([name, categoryId])
+}
+
+model Product {
+  id            String            @id @default(cuid())
+  name          String
+  description   String?
+  salesUnit     SalesUnit         @default(UNIT)
+  businessId    String            @map("business_id")
+  categoryId    String            @map("category_id")
+  imageUrl      String?           @map("image_url")
+  averageRating Float             @default(0) @map("average_rating")
+  reviewCount   Int               @default(0) @map("review_count")
+  favoritedBy   FavoriteProduct[]
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category      Category          @relation(fields: [categoryId], references: [id])
+  variants      ProductVariant[]
+  reviews       Review[]
+}
+
+model ProductBatch {
+  id             String         @id @default(cuid())
+  quantity       Int
+  expirationDate DateTime?      @map("expiration_date")
+  receivedAt     DateTime       @default(now()) @map("received_at")
+  variantId      String         @map("variant_id")
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+}
+
+model ProductVariant {
+  id              String                  @id @default(cuid())
+  sku             String?                 @unique
+  barcode         String?                 @unique
+  price           Decimal
+  purchasePrice   Decimal                 @map("purchase_price")
+  quantityInStock Int                     @default(0) @map("quantity_in_stock")
+  alertThreshold  Int?                    @map("alert_threshold")
+  itemsPerLot     Int?                    @map("items_per_lot")
+  lotPrice        Decimal?                @map("lot_price")
+  productId       String                  @map("product_id")
+  imageUrl        String?                 @map("image_url")
+  menuItems       MenuItem[]
+  orderLines      OrderLine[]
+  batches         ProductBatch[]
+  product         Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockMovements  StockMovement[]
+  attributeValues VariantAttributeValue[]
+}
+
+model VariantAttributeValue {
+  id          String            @id @default(cuid())
+  value       String
+  variantId   String            @map("variant_id")
+  attributeId String            @map("attribute_id")
+  attribute   CategoryAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  variant     ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, attributeId])
+}
+
+model FavoriteProduct {
+  userId     String   @map("user_id")
+  productId  String   @map("product_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+}
+
+model StockMovement {
+  id             String         @id @default(cuid())
+  type           MovementType
+  quantityChange Int            @map("quantity_change")
+  newQuantity    Int            @map("new_quantity")
+  reason         String?
+  createdAt      DateTime       @default(now()) @map("created_at")
+  variantId      String         @map("variant_id")
+  businessId     String         @map("business_id")
+  orderId        String?        @map("order_id")
+  performedById  String         @map("performed_by_id")
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order          Order?         @relation(fields: [orderId], references: [id])
+  performedBy    User           @relation(fields: [performedById], references: [id])
+  variant        ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model RestaurantTable {
+  id          String   @id @default(cuid())
+  name        String
+  capacity    Int
+  isAvailable Boolean  @default(true)
+  businessId  String   @map("business_id")
+  orders      Order[]
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, name])
+}
+
+model Menu {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal
+  isActive    Boolean    @default(true)
+  businessId  String     @map("business_id")
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  menuItems   MenuItem[]
+
+  @@unique([businessId, name])
+}
+
+model MenuItem {
+  id        String         @id @default(cuid())
+  quantity  Int            @default(1)
+  menuId    String         @map("menu_id")
+  variantId String         @map("variant_id")
+  menu      Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([menuId, variantId])
+}
+
+model Order {
+  id                     String               @id @default(cuid())
+  orderNumber            String               @unique @map("order_number")
+  type                   OrderType
+  status                 OrderStatus          @default(PENDING)
+  totalAmount            Decimal              @map("total_amount")
+  notes                  String?
+  createdAt              DateTime             @default(now()) @map("created_at")
+  businessId             String               @map("business_id")
+  customerId             String               @map("customer_id")
+  purchasingBusinessId   String?              @map("purchasing_business_id")
+  employeeId             String?              @map("employee_id")
+  reservationDate        DateTime?            @map("reservation_date")
+  paymentIntentId        String?              @unique @map("payment_intent_id")
+  paymentMethod          PaymentMethodEnum?   @map("payment_method")
+  transactionId          String?              @unique @map("transaction_id")
+  tableId                String?              @map("table_id")
+  discountAmount         Decimal              @default(0.0) @map("discount_amount")
+  estimatedDeliveryDate  DateTime?            @map("estimated_delivery_date")
+  shippingCarrier        String?              @map("shipping_carrier")
+  shippingDate           DateTime?            @map("shipping_date")
+  shippingFee            Decimal              @default(0.0) @map("shipping_fee")
+  shippingMode           String?              @map("shipping_mode")
+  shippingTrackingNumber String?              @map("shipping_tracking_number")
+  subTotal               Decimal              @default(0.0) @map("sub_total")
+  invoice                Invoice?
+  business               Business             @relation("BusinessOrders", fields: [businessId], references: [id])
+  customer               User                 @relation("CustomerOrders", fields: [customerId], references: [id])
+  employee               User?                @relation("EmployeeActions", fields: [employeeId], references: [id], onDelete: Restrict)
+  purchasingBusiness     Business?            @relation("BusinessPurchases", fields: [purchasingBusinessId], references: [id], onDelete: Restrict)
+  table                  RestaurantTable?     @relation(fields: [tableId], references: [id])
+  lines                  OrderLine[]
+  statusHistory          OrderStatusHistory[]
+  payments               PaymentTransaction[]
+  stockMovements         StockMovement[]
+  walletTransactions     WalletTransaction[]
+}
+
+model OrderLine {
+  id        String         @id @default(cuid())
+  quantity  Int
+  price     Decimal
+  orderId   String         @map("order_id")
+  variantId String         @map("variant_id")
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model OrderStatusHistory {
+  id            String      @id @default(cuid())
+  status        OrderStatus
+  notes         String?
+  timestamp     DateTime    @default(now())
+  orderId       String      @map("order_id")
+  triggeredById String?     @map("triggered_by_id")
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  triggeredBy   User?       @relation(fields: [triggeredById], references: [id])
+}
+
+model PaymentTransaction {
+  id                    String             @id @default(cuid())
+  amount                Decimal
+  currencyCode          String             @map("currency_code")
+  provider              PaymentMethodEnum
+  providerTransactionId String?            @unique @map("provider_transaction_id")
+  status                PaymentStatus      @default(PENDING)
+  metadata              Json?
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+  orderId               String?            @map("order_id")
+  walletTransactionId   String?
+  order                 Order?             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  walletTransaction     WalletTransaction?
+}
+
+model Review {
   id        String   @id @default(cuid())
-  rating    Int // 1 à 5
+  rating    Int
   comment   String?
   createdAt DateTime @default(now()) @map("created_at")
-
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String   @map("business_id")
-  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId   String   @map("author_id")
-
-  @@unique([businessId, authorId]) // Un utilisateur ne peut laisser qu'un seul avis par entreprise
+  productId String   @map("product_id")
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
-// --- NOUVELLES ÉNUMÉRATIONS ---
+model Wallet {
+  id           String              @id @default(cuid())
+  balance      Decimal             @default(0.0)
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  userId       String              @unique @map("user_id")
+  currencyId   String              @map("currency_id")
+  currency     Currency            @relation(fields: [currencyId], references: [id])
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id                          String                  @id @default(cuid())
+  type                        WalletTransactionType
+  amount                      Decimal
+  status                      WalletTransactionStatus @default(PENDING)
+  description                 String
+  createdAt                   DateTime                @default(now()) @map("created_at")
+  walletId                    String                  @map("wallet_id")
+  relatedOrderId              String?                 @map("related_order_id")
+  relatedPaymentTransactionId String?                 @unique @map("related_payment_transaction_id")
+  metadata                    Json?
+  transferPeerTransactionId   String?                 @unique @map("transfer_peer_transaction_id")
+  relatedOrder                Order?                  @relation(fields: [relatedOrderId], references: [id])
+  relatedPaymentTransaction   PaymentTransaction?     @relation(fields: [relatedPaymentTransactionId], references: [id])
+  transferPeerTransaction     WalletTransaction?      @relation("WalletTransfer", fields: [transferPeerTransactionId], references: [id], onDelete: NoAction)
+  transferTransaction         WalletTransaction?      @relation("WalletTransfer")
+  wallet                      Wallet                  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id             String           @id @default(cuid())
+  invoiceNumber  String           @unique @map("invoice_number")
+  status         InvoiceStatus    @default(DRAFT)
+  issueDate      DateTime         @default(now()) @map("issue_date")
+  dueDate        DateTime         @map("due_date")
+  pdfUrl         String?          @map("pdf_url")
+  notes          String?
+  subTotal       Decimal
+  discountAmount Decimal          @default(0.0)
+  shippingFee    Decimal          @default(0.0)
+  totalAmount    Decimal
+  orderId        String           @unique @map("order_id")
+  order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payments       InvoicePayment[]
+}
+
+model InvoicePayment {
+  id             String   @id @default(cuid())
+  amountPaid     Decimal  @map("amount_paid")
+  paymentDate    DateTime @default(now()) @map("payment_date")
+  paymentMethod  String
+  transactionRef String?  @unique @map("transaction_ref")
+  invoiceId      String   @map("invoice_id")
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Invitation {
+  id          String           @id @default(cuid())
+  email       String
+  token       String           @unique
+  role        MemberRole
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime         @map("expires_at")
+  businessId  String           @map("business_id")
+  invitedById String           @map("invited_by_id")
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy   User             @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([email, businessId])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
+
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -184,407 +459,9 @@ enum DayOfWeek {
   SUNDAY
 }
 
-// Table de jointure pour lier les Utilisateurs aux Entreprises (Employés)
-model BusinessMember {
-  id         String     @id @default(cuid())
-  role       MemberRole // ADMIN ou MEMBER
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String     @map("user_id")
-  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String     @map("business_id")
-  createdAt  DateTime   @default(now()) @map("created_at")
-
-  @@unique([userId, businessId]) // Un utilisateur ne peut avoir qu'un seul rôle par entreprise
-}
-
-// ----------------------------------------
-// ---      MODÈLES PRODUITS & STOCK      ---
-// ----------------------------------------
-
-model Category {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  description String?
-  imageUrl    String? @map("image_url")
-
-  // Relations
-  products   Product[]
-  attributes CategoryAttribute[] // Attributs spécifiques à cette catégorie (ex: "Taille", "Couleur" pour Vêtements)
-}
-
-// Attributs dynamiques par catégorie
-model CategoryAttribute {
-  id         String   @id @default(cuid())
-  name       String // ex: "Taille", "Couleur", "Ingrédients"
-  categoryId String   @map("category_id")
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  // Relations
-  variantValues VariantAttributeValue[]
-
-  @@unique([name, categoryId])
-}
-
-model Product {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  // Ce produit est-il destiné à la vente en gros (lot) ou au détail (unité) ?
-  salesUnit   SalesUnit @default(UNIT)
-
-  imageUrl String? @map("image_url") // Image principale/par défaut du produit
-
-  // --- CHAMPS AJOUTÉS POUR LES AVIS (AGRÉGATS) ---
-  averageRating Float @default(0) @map("average_rating")
-  reviewCount   Int   @default(0) @map("review_count")
-
-  // Relations
-  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String           @map("business_id")
-  category   Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  categoryId String           @map("category_id")
-  variants   ProductVariant[]
-  reviews    Review[]
-
-  favoritedBy FavoriteProduct[]
-}
-
-// --- NOUVEAU MODÈLE POUR LA GESTION DES LOTS ---
-model ProductBatch {
-  id             String    @id @default(cuid())
-  quantity       Int // Quantité restante dans ce lot
-  expirationDate DateTime? @map("expiration_date") // Date de péremption (optionnelle)
-  receivedAt     DateTime  @default(now()) @map("received_at") // Date de réception du lot
-
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId String         @map("variant_id")
-}
-
-model ProductVariant {
-  id              String  @id @default(cuid())
-  sku             String? @unique // Stock Keeping Unit
-  barcode         String? @unique
-  price           Decimal // Prix de vente (si vendu à l'unité)
-  purchasePrice   Decimal @map("purchase_price") // Prix d'achat
-  quantityInStock Int     @default(0) @map("quantity_in_stock")
-  alertThreshold  Int?    @map("alert_threshold") // Seuil d'alerte de stock
-
-  // Pour les Fournisseurs
-  itemsPerLot Int?     @map("items_per_lot") // Nombre d'unités par lot
-  lotPrice    Decimal? @map("lot_price") // Prix du lot
-
-  imageUrl String? @map("image_url") // AJOUTER : Image spécifique à la variante
-
-  // Relations
-  product         Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId       String                  @map("product_id")
-  attributeValues VariantAttributeValue[]
-  orderLines      OrderLine[]
-  stockMovements  StockMovement[]
-  batches         ProductBatch[] // Nouvelle relation vers les lots
-
-  menuItems MenuItem[]
-}
-
-// Valeur d'un attribut pour une variante (ex: "Taille" = "M", "Couleur" = "Bleu")
-model VariantAttributeValue {
-  id          String            @id @default(cuid())
-  value       String
-  variant     ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId   String            @map("variant_id")
-  attribute   CategoryAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  attributeId String            @map("attribute_id")
-
-  @@unique([variantId, attributeId])
-}
-
-// --- NOUVEAU MODÈLE POUR LES FAVORIS (WISHLIST) ---
-model FavoriteProduct {
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String   @map("user_id")
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId  String   @map("product_id")
-  assignedAt DateTime @default(now()) @map("assigned_at")
-
-  @@id([userId, productId]) // Clé primaire composite
-}
-
-model StockMovement {
-  id             String       @id @default(cuid())
-  type           MovementType
-  quantityChange Int          @map("quantity_change") // Négatif pour une sortie, positif pour une entrée
-  newQuantity    Int          @map("new_quantity") // Quantité résultante
-  reason         String? // Ex: "Vente client", "Achat fournisseur", "Perte (expiré)"
-  createdAt      DateTime     @default(now()) @map("created_at")
-
-  // Relations
-  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  variantId     String         @map("variant_id")
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId    String         @map("business_id")
-  order         Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  orderId       String?        @map("order_id")
-  performedBy   User           @relation(fields: [performedById], references: [id], onDelete: Restrict)
-  performedById String         @map("performed_by_id")
-}
-
-// --- NOUVEAUX MODÈLES POUR LES RESTAURANTS ---
-model RestaurantTable {
-  id          String  @id @default(cuid())
-  name        String // Ex: "Table 2", "Terrasse 5"
-  capacity    Int
-  isAvailable Boolean @default(true) // Statut rapide
-
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String   @map("business_id")
-  orders     Order[]
-
-  @@unique([businessId, name]) // Le nom de la table doit être unique par restaurant
-}
-
-model Menu {
-  id          String  @id @default(cuid())
-  name        String // Ex: "Menu du Jour"
-  description String?
-  price       Decimal
-  isActive    Boolean @default(true)
-
-  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId String     @map("business_id")
-  menuItems  MenuItem[]
-
-  @@unique([businessId, name])
-}
-
-model MenuItem {
-  id       String @id @default(cuid())
-  quantity Int    @default(1)
-
-  menu      Menu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  menuId    String         @map("menu_id")
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  variantId String         @map("variant_id")
-
-  @@unique([menuId, variantId])
-}
-
-// ----------------------------------------
-// ---     MODÈLES COMMANDES & AVIS     ---
-// ----------------------------------------
-
-model Order {
-  id          String      @id @default(cuid())
-  orderNumber String      @unique @map("order_number")
-  type        OrderType
-  status      OrderStatus @default(PENDING)
-  totalAmount Decimal     @map("total_amount")
-  notes       String?
-  createdAt   DateTime    @default(now()) @map("created_at")
-
-  // -- Relations --
-  // Pour une VENTE (SALE) ou RESERVATION (RESERVATION)
-  // - businessId: l'entreprise qui vend/reçoit la réservation
-  // - customerId: l'utilisateur Particulier qui achète/réserve
-  business   Business @relation("BusinessOrders", fields: [businessId], references: [id], onDelete: Restrict)
-  businessId String   @map("business_id")
-  customer   User     @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Restrict)
-  customerId String   @map("customer_id")
-
-  // Pour un ACHAT (PURCHASE)
-  // - purchasingBusinessId: l'entreprise qui achète
-  // - supplierBusinessId: l'entreprise qui vend (le fournisseur)
-  // - employeeId: l'employé qui a passé la commande
-  purchasingBusiness   Business? @relation("BusinessPurchases", fields: [purchasingBusinessId], references: [id], onDelete: Restrict)
-  purchasingBusinessId String?   @map("purchasing_business_id")
-  employee             User?     @relation("EmployeeActions", fields: [employeeId], references: [id], onDelete: Restrict)
-  employeeId           String?   @map("employee_id")
-
-  // -- Table de restaurant pour les réservations --
-  table           RestaurantTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  tableId         String?          @map("table_id")
-  reservationDate DateTime?        @map("reservation_date")
-
-  // --- CHAMPS AJOUTÉS POUR LE PAIEMENT ---
-  paymentMethod   PaymentMethodEnum? @map("payment_method")
-  paymentIntentId String?            @unique @map("payment_intent_id") // ID du PaymentIntent de Stripe, etc.
-  transactionId   String?            @unique @map("transaction_id") // ID final de la transaction validée
-  // ------------------------------------
-
-   // --- NOUVEAUX CHAMPS POUR LA VENTILATION DES COÛTS ---
-  subTotal       Decimal     @default(0.0) @map("sub_total")
-  discountAmount Decimal     @default(0.0) @map("discount_amount")
-  shippingFee    Decimal     @default(0.0) @map("shipping_fee")
-
-  // --- NOUVEAUX CHAMPS POUR LA LIVRAISON ---
-  shippingTrackingNumber String?   @map("shipping_tracking_number")
-  shippingMode           String?   @map("shipping_mode")
-  shippingCarrier        String?   @map("shipping_carrier")
-  shippingDate           DateTime? @map("shipping_date")
-  estimatedDeliveryDate  DateTime? @map("estimated_delivery_date")
-
-  invoice Invoice? // Relation 1-1 vers la facture
-
-  statusHistory OrderStatusHistory[] // Nouvelle relation vers l'historique
-
-  payments PaymentTransaction[] // Nouvelle relation vers les transactions de paiement
-
-  lines          OrderLine[]
-  stockMovements StockMovement[]
-  walletTransactions WalletTransaction[]
-}
-
-model OrderLine {
-  id       String  @id @default(cuid())
-  quantity Int
-  price    Decimal // Prix unitaire au moment de la commande
-
-  // Relations
-  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId   String         @map("order_id")
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
-  variantId String         @map("variant_id")
-}
-
-// --- NOUVEAU MODÈLE POUR L'HISTORIQUE DES STATUTS ---
-model OrderStatusHistory {
-  id        String    @id @default(cuid())
-  status    OrderStatus
-  notes     String?   // Ex: "Statut mis à jour par l'employé Bob", "Paiement reçu via Stripe"
-  timestamp DateTime  @default(now())
-
-  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId   String    @map("order_id")
-
-  // L'utilisateur qui a déclenché le changement (peut être un client, un employé, ou null pour un webhook)
-  triggeredBy User?     @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
-  triggeredById String? @map("triggered_by_id")
-}
-
-// --- NOUVEAU MODÈLE POUR LE SUIVI DES TRANSACTIONS DE PAIEMENT ---
-model PaymentTransaction {
-  id                    String            @id @default(cuid())
-  amount                Decimal
-  currencyCode          String            @map("currency_code")
-  provider              PaymentMethodEnum // Ex: STRIPE, MVOLA, MANUAL
-  providerTransactionId String?           @unique @map("provider_transaction_id") // L'ID côté fournisseur (ex: ch_12345)
-  status                PaymentStatus     @default(PENDING) // PENDING, SUCCESS, FAILED, REFUNDED
-  metadata              Json? // Pour stocker des informations spécifiques au fournisseur
-  createdAt             DateTime          @default(now()) @map("created_at")
-  updatedAt             DateTime          @updatedAt @map("updated_at")
-  walletTransactionId   String?
-
-  walletTransaction     WalletTransaction?
-
-  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId String? @map("order_id")
-}
-
-model Review {
-  id        String   @id @default(cuid())
-  rating    Int // 1 to 5
-  comment   String?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String  @map("product_id")
-  author    User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId  String  @map("author_id")
-}
-
-
-// ----------------------------------------
-// ---      MODÈLES PORTEFEUILLE (WALLET)   ---
-// ----------------------------------------
-
-model Wallet {
-  id         String   @id @default(cuid())
-  balance    Decimal  @default(0.0) // Utiliser Decimal pour la précision monétaire
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  // Relation 1-1 unique avec l'utilisateur
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String   @unique @map("user_id")
-
-  // Devise du portefeuille
-  currency   Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict)
-  currencyId String   @map("currency_id")
-
-  // Historique des transactions
-  transactions WalletTransaction[]
-}
-
-model WalletTransaction {
-  id        String                @id @default(cuid())
-  type      WalletTransactionType // DEPOSIT, WITHDRAWAL, PAYMENT, REFUND
-  amount    Decimal               // Positif pour crédit, négatif pour débit
-  status    WalletTransactionStatus @default(PENDING)
-  description String
-
-  createdAt DateTime              @default(now()) @map("created_at")
-
-  // Relations pour la traçabilité
-  wallet    Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  walletId  String                @map("wallet_id")
-
-  metadata  Json?
-  
-  // Pour lier une transaction de portefeuille à une commande (ex: paiement d'une commande)
-  relatedOrder    Order?                @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
-  relatedOrderId  String?               @map("related_order_id")
-  
-  // Pour lier à une transaction de paiement externe (ex: dépôt Stripe)
-  relatedPaymentTransaction    PaymentTransaction? @relation(fields: [relatedPaymentTransactionId], references: [id], onDelete: SetNull)
-  relatedPaymentTransactionId  String?             @unique @map("related_payment_transaction_id")
-
-  // --- NOUVEAUX CHAMPS POUR LES TRANSFERTS ---
-  // Pour lier les deux côtés d'un transfert
-  transferPeerTransaction   WalletTransaction? @relation("WalletTransfer", fields: [transferPeerTransactionId], references: [id], onDelete: NoAction)
-  transferPeerTransactionId String?            @unique @map("transfer_peer_transaction_id")
-  transferTransaction       WalletTransaction? @relation("WalletTransfer")
-}
-
-// --- NOUVEAUX MODÈLES POUR LA FACTURATION ---
-model Invoice {
-  id            String   @id @default(cuid())
-  invoiceNumber String   @unique @map("invoice_number")
-  status        InvoiceStatus @default(DRAFT)
-  issueDate     DateTime @default(now()) @map("issue_date")
-  dueDate       DateTime @map("due_date")
-  pdfUrl        String?  @map("pdf_url")
-  notes         String?
-  
-  // Agrégats de la commande (dénormalisés pour la facture)
-  subTotal      Decimal
-  discountAmount Decimal  @default(0.0)
-  shippingFee   Decimal  @default(0.0)
-  totalAmount   Decimal
-  
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId String   @unique @map("order_id") // Une seule facture par commande
-
-  payments InvoicePayment[]
-}
-
-model InvoicePayment {
-  id             String      @id @default(cuid())
-  amountPaid     Decimal     @map("amount_paid")
-  paymentDate    DateTime    @default(now()) @map("payment_date")
-  paymentMethod  String      // Ex: "Portefeuille", "Stripe", "Espèces"
-  transactionRef String?     @unique @map("transaction_ref") // Référence (ex: ID de PaymentTransaction)
-
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  invoiceId String  @map("invoice_id")
-}
-
-// ----------------------------------------
-// ---              ENUMS                 ---
-// ----------------------------------------
-
 enum ProfileType {
   PARTICULIER
-  PRO // Un utilisateur PRO peut être Commerçant, Fournisseur ou Restaurateur via ses entreprises
+  PRO
 }
 
 enum BusinessType {
@@ -599,8 +476,8 @@ enum MemberRole {
 }
 
 enum SalesUnit {
-  UNIT // Vendu à l'unité
-  LOT // Vendu en lot
+  UNIT
+  LOT
 }
 
 enum MovementType {
@@ -610,7 +487,7 @@ enum MovementType {
   RETURN
   LOSS
   ADJUSTMENT
-  EXPIRATION // Nouvelle raison spécifique pour les pertes dues à la péremption
+  EXPIRATION
 }
 
 enum OrderType {
@@ -621,43 +498,40 @@ enum OrderType {
 
 enum OrderStatus {
   PENDING
-  PENDING_PAYMENT // Nouveau: La commande attend le paiement
-  PAID // Nouveau: Paiement reçu
-  PAYMENT_FAILED // Nouveau: Paiement échoué
   CONFIRMED
   PROCESSING
   SHIPPED
   DELIVERED
   COMPLETED
   CANCELLED
-  REJECTED // Nouveau: Commande rejetée par le vendeur (utile pour B2B)
-  PENDING_APPROVAL // Nouveau: Pour les commandes B2B en attente d'acceptation par le fournisseur
-  PENDING_REFUND // Nouveau: Remboursement en cours
-  REFUNDED // Nouveau: Entièrement remboursé
-  PARTIALLY_REFUNDED // Nouveau: Partiellement remboursé
-  ARCHIVED // NOUVEAU STATUT
+  REFUNDED
+  PENDING_PAYMENT
+  PAID
+  PAYMENT_FAILED
+  REJECTED
+  PENDING_APPROVAL
+  PENDING_REFUND
+  PARTIALLY_REFUNDED
+  ARCHIVED
 }
 
-// Nouvelle Enum pour les méthodes de paiement
 enum PaymentMethodEnum {
   STRIPE
-  KARTAPAY 
-  MVOLA 
-  WALLET
+  MVOLA
   MANUAL
+  WALLET
+  KARTAPAY
 }
 
-// Nouvelle Enum pour le statut des transactions de paiement
 enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
   REFUNDED
-  PENDING_REFUND
   PARTIALLY_REFUNDED
+  PENDING_REFUND
 }
 
-// --- NOUVELLE ENUM POUR LE SEXE ---
 enum Gender {
   MALE
   FEMALE
@@ -665,76 +539,51 @@ enum Gender {
   PREFER_NOT_TO_SAY
 }
 
-// --- NOUVEAU MODÈLE POUR LES INVITATIONS ---
-model Invitation {
-  id        String           @id @default(cuid())
-  email     String // L'email de la personne invitée
-  token     String           @unique // Token unique et sécurisé pour accepter l'invitation
-  role      MemberRole
-  status    InvitationStatus @default(PENDING)
-  expiresAt DateTime         @map("expires_at")
-
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  businessId  String   @map("business_id")
-  invitedBy   User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
-  invitedById String   @map("invited_by_id")
-
-  @@unique([email, businessId]) // Une personne ne peut être invitée qu'une seule fois par entreprise
-}
-
-// --- NOUVELLE ÉNUMÉRATION POUR LE STATUT DE L'INVITATION ---
 enum InvitationStatus {
   PENDING
   ACCEPTED
   EXPIRED
 }
 
-
-// --- NOUVELLES ENUMS POUR LE PORTEFEUILLE ---
-
 enum WalletTransactionType {
-  DEPOSIT    // Dépôt d'argent dans le portefeuille
-  WITHDRAWAL // Retrait d'argent du portefeuille
-  PAYMENT    // Paiement d'une commande via le portefeuille
-  REFUND     // Remboursement d'une commande vers le portefeuille
-  ADJUSTMENT // Ajustement manuel par un admin
-  TRANSFER   // NOUVEAU TYPE POUR LES TRANSFERTS P2P
+  DEPOSIT
+  WITHDRAWAL
+  PAYMENT
+  REFUND
+  ADJUSTMENT
+  TRANSFER
 }
 
 enum WalletTransactionStatus {
-  PENDING    // La transaction est initiée mais pas encore complétée (ex: dépôt en attente)
-  COMPLETED  // La transaction a réussi, les fonds sont déplacés
-  FAILED     // La transaction a échoué
-  CANCELLED  // La transaction a été annulée
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
-// --- NOUVELLE ENUM POUR LE TYPE DE COMMERCE ---
 enum CommerceType {
-  PHYSICAL    // Commerce physique
-  DIGITAL     // Commerce en ligne / E-commerce
-  HYBRID      // Les deux
+  PHYSICAL
+  DIGITAL
+  HYBRID
 }
 
-// --- NOUVELLES ÉNUMÉRATIONS ---
 enum Civility {
-  MR   // Monsieur
-  MRS  // Madame
-  MS   // Mademoiselle
+  MR
+  MRS
+  MS
 }
 
 enum PriceRange {
-  ENTRY_LEVEL // Bas de gamme
-  MID_RANGE   // Moyenne gamme
-  HIGH_END    // Haut de gamme
-  LUXURY      // Luxe
+  ENTRY_LEVEL
+  MID_RANGE
+  HIGH_END
+  LUXURY
 }
 
-
-// --- NOUVELLE ENUM POUR LE STATUT DES FACTURES ---
 enum InvoiceStatus {
-  DRAFT   // Brouillon, non finalisée
-  SENT    // Envoyée au client
-  PAID    // Entièrement payée
-  PARTIALLY_PAID // Partiellement payée
-  VOID    // Annulée
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  VOID
 }
